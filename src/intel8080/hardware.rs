@@ -1,7 +1,19 @@
+use crate::intel8080::hardware::Register::B;
+
 const MEMORY_SIZE: usize = 2usize.pow(16);
 const REGISTER_NUMBER: usize = 7;
 
 pub struct Intel8080 {
+    // https://web.archive.org/web/20240118230903/http://www.emulator101.com/memory-maps.html
+    // ROM:
+    // 0x0000 => 0x07FF invaders.h
+    // 0x0800 => 0x0FFF invaders.g
+    // 0x1000 => 0x17FF invaders.f
+    // 0x1800 => 0x1FFF invaders.e
+    // RAM:
+    // 0x2000 => 0x23FF Work RAM
+    // 0x2400 => 0x3FFF Video RAM
+    // 0x4000 =-> ... RAM mirror
     pub memory: [u8; MEMORY_SIZE],
     registers: [u8; REGISTER_NUMBER],
     pub stack_pointer: u16,
@@ -31,22 +43,36 @@ impl Default for Intel8080 {
 }
 
 impl Intel8080 {
-    pub fn get_bc(&self) -> u16 {
-        self.bc
+    pub fn get_paired_register(&self, register_pair: RegisterPair) -> u16{
+        match register_pair {
+            RegisterPair::BC => self.bc,
+            RegisterPair::DE => self.de,
+            RegisterPair::HL => self.hl,
+            RegisterPair::PSW => self.psw
+        }
     }
 
-    pub fn get_de(&self) -> u16 {
-        self.de
+    pub fn set_register_pair(&mut self, register_pair: RegisterPair, value: u16) {
+        let (first, second) = Self::get_paired_register_subsets(value);
+        match register_pair {
+            RegisterPair::BC => {
+                self.set_register(B, first);
+                self.set_register(Register::C, second)
+            }
+            RegisterPair::DE => {
+                self.set_register(Register::D, first);
+                self.set_register(Register::E, second);
+            }
+            RegisterPair::HL => {
+                self.set_register(Register::H, first);
+                self.set_register(Register::L, second);
+            }
+            RegisterPair::PSW => {
+                self.set_register(Register::A, first);
+                self.set_register(Register::M, second);
+            }
+        }
     }
-
-    pub fn get_hl(&self) -> u16 {
-        self.hl
-    }
-
-    pub fn get_psw(&self) -> u16 {
-        self.psw
-    }
-
     pub fn get_register(&self, register: Register) -> u8 {
         match register {
             Register::M => {
@@ -71,15 +97,15 @@ impl Intel8080 {
         let (mut index, paired, first_byte) = Register::value(register);
 
         let paired_pointer = match paired {
-            PairedRegister::PSW => &mut self.psw,
-            PairedRegister::BC => &mut self.bc,
-            PairedRegister::DE => &mut self.de,
-            PairedRegister::HL => &mut self.hl,
+            RegisterPair::PSW => &mut self.psw,
+            RegisterPair::BC => &mut self.bc,
+            RegisterPair::DE => &mut self.de,
+            RegisterPair::HL => &mut self.hl,
         };
 
         Self::update_paired_register(paired_pointer, value as u16, first_byte);
 
-        if let PairedRegister::PSW = paired {
+        if let RegisterPair::PSW = paired {
             // register M
             if index == 6 {
                 self.memory[self.hl as usize] = value;
@@ -115,6 +141,11 @@ impl Intel8080 {
         *paired_register |= value << offset;
     }
 
+    fn get_paired_register_subsets(value: u16) -> (u8, u8) {
+        let first_byte = (value >> 8) as u8;
+        (first_byte, value as u8)
+    }
+
 
 }
 pub enum Register {
@@ -128,7 +159,7 @@ pub enum Register {
     A,
 }
 
-enum PairedRegister {
+pub enum RegisterPair {
     BC,
     DE,
     HL,
@@ -144,16 +175,16 @@ pub enum StatusFlags {
 }
 
 impl Register {
-    fn value(variation: Self) -> (usize, PairedRegister, bool) {
+    fn value(variation: Self) -> (usize, RegisterPair, bool) {
         match variation {
-            Register::B => (0, PairedRegister::BC, true),
-            Register::C => (1, PairedRegister::BC, false),
-            Register::D => (2, PairedRegister::DE, true),
-            Register::E => (3, PairedRegister::DE, false),
-            Register::H => (4, PairedRegister::HL, true),
-            Register::L => (5, PairedRegister::HL, false),
-            Register::M => (6, PairedRegister::PSW, false),
-            Register::A => (7, PairedRegister::PSW, true),
+            Register::B => (0, RegisterPair::BC, true),
+            Register::C => (1, RegisterPair::BC, false),
+            Register::D => (2, RegisterPair::DE, true),
+            Register::E => (3, RegisterPair::DE, false),
+            Register::H => (4, RegisterPair::HL, true),
+            Register::L => (5, RegisterPair::HL, false),
+            Register::M => (6, RegisterPair::PSW, false),
+            Register::A => (7, RegisterPair::PSW, true),
         }
     }
 }
