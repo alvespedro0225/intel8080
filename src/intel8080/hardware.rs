@@ -1,5 +1,3 @@
-use crate::intel8080::hardware::Register::B;
-
 const MEMORY_SIZE: usize = 2usize.pow(16);
 const REGISTER_NUMBER: usize = 7;
 
@@ -43,33 +41,33 @@ impl Default for Intel8080 {
 }
 
 impl Intel8080 {
-    pub fn get_paired_register(&self, register_pair: RegisterPair) -> u16{
+    pub fn get_register_pair(&self, register_pair: RegisterPair) -> u16 {
         match register_pair {
             RegisterPair::BC => self.bc,
             RegisterPair::DE => self.de,
             RegisterPair::HL => self.hl,
-            RegisterPair::PSW => self.psw
+            RegisterPair::PSW => self.psw,
         }
     }
 
     pub fn set_register_pair(&mut self, register_pair: RegisterPair, value: u16) {
-        let (first, second) = Self::get_paired_register_subsets(value);
+        let (high, low) = Self::get_paired_register_subsets(value);
         match register_pair {
             RegisterPair::BC => {
-                self.set_register(B, first);
-                self.set_register(Register::C, second)
+                self.set_register(Register::B, high);
+                self.set_register(Register::C, low)
             }
             RegisterPair::DE => {
-                self.set_register(Register::D, first);
-                self.set_register(Register::E, second);
+                self.set_register(Register::D, high);
+                self.set_register(Register::E, low);
             }
             RegisterPair::HL => {
-                self.set_register(Register::H, first);
-                self.set_register(Register::L, second);
+                self.set_register(Register::H, high);
+                self.set_register(Register::L, low);
             }
             RegisterPair::PSW => {
-                self.set_register(Register::A, first);
-                self.set_register(Register::M, second);
+                self.set_register(Register::A, high);
+                self.set_register(Register::M, low);
             }
         }
     }
@@ -80,7 +78,7 @@ impl Intel8080 {
                 self.memory[index]
             }
             _ => {
-                let (mut index, _, _) = Register::value(register);
+                let (mut index, _, _) = Register::get_data(register);
                 // register A is 7 (0b111) in instruction but index 6 on the struct since M is not stored,
                 // but referenced
                 if index == 7 {
@@ -93,8 +91,7 @@ impl Intel8080 {
     }
 
     pub fn set_register(&mut self, register: Register, value: u8) {
-
-        let (mut index, paired, first_byte) = Register::value(register);
+        let (mut index, paired, high_byte) = Register::get_data(register);
 
         let paired_pointer = match paired {
             RegisterPair::PSW => &mut self.psw,
@@ -103,13 +100,13 @@ impl Intel8080 {
             RegisterPair::HL => &mut self.hl,
         };
 
-        Self::update_paired_register(paired_pointer, value as u16, first_byte);
+        Self::update_paired_register(paired_pointer, value as u16, high_byte);
 
         if let RegisterPair::PSW = paired {
             // register M
             if index == 6 {
                 self.memory[self.hl as usize] = value;
-                return
+                return;
             }
 
             index = 6;
@@ -124,29 +121,27 @@ impl Intel8080 {
             StatusFlags::Z => 6,
             StatusFlags::AC => 4,
             StatusFlags::P => 2,
-            StatusFlags::C => 0
+            StatusFlags::C => 0,
         };
 
         if value {
             self.status |= 1 << offset;
-            return
+            return;
         }
 
         self.status &= !(1 << offset);
     }
-    fn update_paired_register(paired_register: &mut u16, value: u16, first_byte: bool) {
-        let offset = if first_byte { 8 } else { 0 };
+    fn update_paired_register(paired_register: &mut u16, value: u16, high_byte: bool) {
+        let offset = if high_byte { 8 } else { 0 };
         let mask = !(0xF << offset);
         *paired_register &= mask;
         *paired_register |= value << offset;
     }
 
     fn get_paired_register_subsets(value: u16) -> (u8, u8) {
-        let first_byte = (value >> 8) as u8;
-        (first_byte, value as u8)
+        let high_byte = (value >> 8) as u8;
+        (high_byte, value as u8)
     }
-
-
 }
 pub enum Register {
     B,
@@ -171,11 +166,11 @@ pub enum StatusFlags {
     Z,
     P,
     C,
-    AC
+    AC,
 }
 
 impl Register {
-    fn value(variation: Self) -> (usize, RegisterPair, bool) {
+    fn get_data(variation: Self) -> (usize, RegisterPair, bool) {
         match variation {
             Register::B => (0, RegisterPair::BC, true),
             Register::C => (1, RegisterPair::BC, false),
@@ -193,35 +188,35 @@ pub mod tests {
     use super::*;
 
     #[test]
-    fn mutation_first_byte() {
+    fn set_high_byte() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::B, 0xFF);
-        assert_eq!(cpu.bc, 0 | (0xFF << 8))
+        assert_eq!(cpu.bc, 0 | (0xFF << 8));
     }
 
     #[test]
-    fn mutation_second_byte() {
+    fn set_low_byte() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::L, 0x3);
-        assert_eq!(cpu.hl, 0x3)
+        assert_eq!(cpu.hl, 0x3);
     }
 
     #[test]
-    fn mutate_a(){
+    fn set_a() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 200);
-        assert_eq!(200, cpu.get_register(Register::A))
+        assert_eq!(200, cpu.get_register(Register::A));
     }
 
     #[test]
-    fn mutate_m_default(){
+    fn set_m_default() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::M, 200);
-        assert_eq!(cpu.get_register(Register::M), 200)
+        assert_eq!(cpu.get_register(Register::M), 200);
     }
 
     #[test]
-    fn mutate_hl_before_m(){
+    fn set_hl_before_m() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::H, 100);
         cpu.set_register(Register::M, 200);
@@ -229,25 +224,46 @@ pub mod tests {
     }
 
     #[test]
-    fn mutate_hl_after_m(){
+    fn set_hl_after_m() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::M, 199);
         cpu.set_register(Register::L, 100);
-        assert_ne!(199, cpu.get_register(Register::M))
+        assert_ne!(199, cpu.get_register(Register::M));
     }
 
     #[test]
-    fn set_status_true(){
+    fn set_status_true() {
         let mut cpu = Intel8080::default();
         cpu.set_status(StatusFlags::S, true);
-        assert_eq!(130, cpu.status)
+        assert_eq!(130, cpu.status);
     }
 
     #[test]
-    fn set_status_false(){
+    fn set_status_false() {
         let mut cpu = Intel8080::default();
         cpu.status = 255;
         cpu.set_status(StatusFlags::AC, false);
-        assert_eq!(239, cpu.status)
+        assert_eq!(239, cpu.status);
+    }
+
+    #[test]
+    fn set_register_pair() {
+        let mut cpu = Intel8080::default();
+        cpu.set_register_pair(RegisterPair::PSW, 0xBC10);
+        assert_eq!(cpu.get_register_pair(RegisterPair::PSW), 0xBC10);
+    }
+
+    #[test]
+    fn set_register_pair_high_byte() {
+        let mut cpu = Intel8080::default();
+        cpu.set_register_pair(RegisterPair::HL, 0x13FF);
+        assert_eq!(cpu.get_register(Register::H), 0x13);
+    }
+
+    #[test]
+    fn set_register_pair_low_byte() {
+        let mut cpu = Intel8080::default();
+        cpu.set_register_pair(RegisterPair::BC, 0xFCBA);
+        assert_eq!(cpu.get_register(Register::C), 0xBA);
     }
 }
