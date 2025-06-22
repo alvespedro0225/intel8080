@@ -1,3 +1,4 @@
+use std::panic::panic_any;
 use crate::intel8080::hardware::{Intel8080, Register, RegisterPair};
 
 // https://en.wikipedia.org/wiki/Intel_8080#Instruction_set Instruction reference
@@ -5,18 +6,26 @@ use crate::intel8080::hardware::{Intel8080, Register, RegisterPair};
 pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
     intel8080.program_counter += 1;
     match instruction {
-        // 0b00RP0001 -> RP = data, where data_low = next_inst and data_high = next_inst + 1
+        0 => return,
+        // 0b00RP0001
         _ if InstructionVars::negate(instruction, InstructionVars::RP) == 1 => {
             lxi_rp_data(instruction, intel8080)
         }
+        // 0b00RP0010
         _ if InstructionVars::negate(instruction, InstructionVars::RP) == 2 => {
             stax_rp(instruction, intel8080);
+        }
+        // 0b00RP0011
+        _ if InstructionVars::negate(instruction, InstructionVars::RP) == 3 => {
+            inx_rp(instruction, intel8080);
         }
         _ => {}
     }
 }
 
+
 // Manual page 25, PDF's 31
+// Uses the next 2 instruction bytes as data and sets RP to it.
 fn lxi_rp_data(instruction: u8, intel8080: &mut Intel8080) {
     let mem = intel8080.memory;
     let pc = intel8080.program_counter as usize;
@@ -29,11 +38,10 @@ fn lxi_rp_data(instruction: u8, intel8080: &mut Intel8080) {
         0 => intel8080.set_register_pair(RegisterPair::BC, data),
         1 => intel8080.set_register_pair(RegisterPair::DE, data),
         2 => intel8080.set_register_pair(RegisterPair::HL, data),
-        3 => intel8080.set_register_pair(RegisterPair::PSW, data),
+        3 => intel8080.set_register_pair(RegisterPair::SP, data),
         _ => panic!("Invalid RP value: {rp}"),
     }
 }
-
 // Manual page 17, PDF's 23
 // Stores register A's value at memory[RP], where RP is BC or DE
 fn stax_rp(instruction: u8, intel8080: &mut Intel8080) {
@@ -46,6 +54,18 @@ fn stax_rp(instruction: u8, intel8080: &mut Intel8080) {
     };
 
     intel8080.memory[index] = intel8080.get_register(Register::A);
+}
+// Manal page 24, PDF's 30
+// Increases RP by 1. Overflow allowed
+fn inx_rp(instruction: u8, intel8080: &mut Intel8080) {
+    let rp = InstructionVars::get(instruction, InstructionVars::RP);
+    let rp = match rp {
+        0 => RegisterPair::BC,
+        1 => RegisterPair::DE,
+        2 => RegisterPair::HL,
+        3 => RegisterPair::SP,
+        _ => panic!("Invalid RP value {rp}")
+    };
 }
 
 fn combine_into_u16(low: u8, high: u8) -> u16 {

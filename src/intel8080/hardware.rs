@@ -17,7 +17,7 @@ pub struct Intel8080 {
     pub stack_pointer: u16,
     pub program_counter: u16,
     // S | Z | 0 | AC | 0 | P | 1 |  C
-    status: u8,
+    flags: u8,
     bc: u16,
     de: u16,
     hl: u16,
@@ -30,7 +30,7 @@ impl Default for Intel8080 {
             memory: [0; MEMORY_SIZE],
             stack_pointer: 0,
             program_counter: 0,
-            status: 2,
+            flags: 2,
             bc: 0,
             de: 0,
             hl: 0,
@@ -47,11 +47,12 @@ impl Intel8080 {
             RegisterPair::DE => self.de,
             RegisterPair::HL => self.hl,
             RegisterPair::PSW => self.psw,
+            RegisterPair::SP => self.stack_pointer
         }
     }
 
     pub fn set_register_pair(&mut self, register_pair: RegisterPair, value: u16) {
-        let (high, low) = Self::get_paired_register_subsets(value);
+        let (high, low) = Self::get_register_pair_subsets(value);
         match register_pair {
             RegisterPair::BC => {
                 self.set_register(Register::B, high);
@@ -66,9 +67,10 @@ impl Intel8080 {
                 self.set_register(Register::L, low);
             }
             RegisterPair::PSW => {
-                self.set_register(Register::A, high);
-                self.set_register(Register::M, low);
+                self.set_register(Register::FLAGS, high);
+                self.set_register(Register::A, low);
             }
+            RegisterPair::SP => self.stack_pointer = value
         }
     }
     pub fn get_register(&self, register: Register) -> u8 {
@@ -78,7 +80,7 @@ impl Intel8080 {
                 self.memory[index]
             }
             _ => {
-                let (mut index, _, _) = Register::get_data(register);
+                let (mut index, _, _) = Register::get_pair_data(register);
                 // register A is 7 (0b111) in instruction but index 6 on the struct since M is not stored,
                 // but referenced
                 if index == 7 {
@@ -91,21 +93,28 @@ impl Intel8080 {
     }
 
     pub fn set_register(&mut self, register: Register, value: u8) {
-        let (mut index, paired, high_byte) = Register::get_data(register);
+        
+        if let Register::M = register {
+            self.memory[self.hl as usize] = value;
+            return
+        }
+        
+        let (mut index, paired, high_byte) = Register::get_pair_data(register);
 
-        let paired_pointer = match paired {
+        let paired_pointer = match &paired {
             RegisterPair::PSW => &mut self.psw,
             RegisterPair::BC => &mut self.bc,
             RegisterPair::DE => &mut self.de,
             RegisterPair::HL => &mut self.hl,
+            RegisterPair::SP => panic!("Got SP from a register reference.")
         };
-
+        
         Self::update_paired_register(paired_pointer, value as u16, high_byte);
 
         if let RegisterPair::PSW = paired {
             // register M
-            if index == 6 {
-                self.memory[self.hl as usize] = value;
+            if index != 7 {
+                self.flags = value;
                 return;
             }
 
@@ -125,11 +134,11 @@ impl Intel8080 {
         };
 
         if value {
-            self.status |= 1 << offset;
+            self.flags |= 1 << offset;
             return;
         }
 
-        self.status &= !(1 << offset);
+        self.flags &= !(1 << offset);
     }
     fn update_paired_register(paired_register: &mut u16, value: u16, high_byte: bool) {
         let offset = if high_byte { 8 } else { 0 };
@@ -138,7 +147,7 @@ impl Intel8080 {
         *paired_register |= value << offset;
     }
 
-    fn get_paired_register_subsets(value: u16) -> (u8, u8) {
+    fn get_register_pair_subsets(value: u16) -> (u8, u8) {
         let high_byte = (value >> 8) as u8;
         (high_byte, value as u8)
     }
@@ -152,6 +161,7 @@ pub enum Register {
     L,
     M,
     A,
+    FLAGS
 }
 
 pub enum RegisterPair {
@@ -159,6 +169,7 @@ pub enum RegisterPair {
     DE,
     HL,
     PSW,
+    SP
 }
 
 pub enum StatusFlags {
@@ -170,7 +181,7 @@ pub enum StatusFlags {
 }
 
 impl Register {
-    fn get_data(variation: Self) -> (usize, RegisterPair, bool) {
+    fn get_pair_data(variation: Self) -> (usize, RegisterPair, bool) {
         match variation {
             Register::B => (0, RegisterPair::BC, true),
             Register::C => (1, RegisterPair::BC, false),
@@ -178,8 +189,9 @@ impl Register {
             Register::E => (3, RegisterPair::DE, false),
             Register::H => (4, RegisterPair::HL, true),
             Register::L => (5, RegisterPair::HL, false),
-            Register::M => (6, RegisterPair::PSW, false),
-            Register::A => (7, RegisterPair::PSW, true),
+            Register::FLAGS => (10, RegisterPair::PSW, true),
+            Register::A => (7, RegisterPair::PSW, false),
+            Register::M => panic!("M is not associated to a pair")
         }
     }
 }
@@ -211,8 +223,8 @@ pub mod tests {
     #[test]
     fn set_m_default() {
         let mut cpu = Intel8080::default();
-        cpu.set_register(Register::M, 200);
-        assert_eq!(cpu.get_register(Register::M), 200);
+        cpu.set_register(Register::A, 200);
+        assert_eq!(cpu.get_register(Register::A), 200);
     }
 
     #[test]
@@ -222,7 +234,7 @@ pub mod tests {
         cpu.set_register(Register::M, 200);
         assert_eq!(cpu.get_register(Register::M), 200);
     }
-
+    
     #[test]
     fn set_hl_after_m() {
         let mut cpu = Intel8080::default();
@@ -235,15 +247,15 @@ pub mod tests {
     fn set_status_true() {
         let mut cpu = Intel8080::default();
         cpu.set_status(StatusFlags::S, true);
-        assert_eq!(130, cpu.status);
+        assert_eq!(130, cpu.flags);
     }
 
     #[test]
     fn set_status_false() {
         let mut cpu = Intel8080::default();
-        cpu.status = 255;
+        cpu.flags = 255;
         cpu.set_status(StatusFlags::AC, false);
-        assert_eq!(239, cpu.status);
+        assert_eq!(239, cpu.flags);
     }
 
     #[test]
