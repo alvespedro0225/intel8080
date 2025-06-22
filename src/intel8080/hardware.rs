@@ -41,7 +41,7 @@ impl Default for Intel8080 {
 }
 
 impl Intel8080 {
-    pub fn get_register_pair(&self, register_pair: RegisterPair) -> u16 {
+    pub fn get_register_pair(&self, register_pair: &RegisterPair) -> u16 {
         match register_pair {
             RegisterPair::BC => self.bc,
             RegisterPair::DE => self.de,
@@ -142,7 +142,7 @@ impl Intel8080 {
     }
     fn update_paired_register(paired_register: &mut u16, value: u16, high_byte: bool) {
         let offset = if high_byte { 8 } else { 0 };
-        let mask = !(0xF << offset);
+        let mask = !(0xFF << offset);
         *paired_register &= mask;
         *paired_register |= value << offset;
     }
@@ -262,7 +262,7 @@ pub mod tests {
     fn set_register_pair() {
         let mut cpu = Intel8080::default();
         cpu.set_register_pair(RegisterPair::PSW, 0xBC10);
-        assert_eq!(cpu.get_register_pair(RegisterPair::PSW), 0xBC10);
+        assert_eq!(cpu.get_register_pair(&RegisterPair::PSW), 0xBC10);
     }
 
     #[test]

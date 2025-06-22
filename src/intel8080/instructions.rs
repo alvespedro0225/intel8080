@@ -1,4 +1,4 @@
-use std::panic::panic_any;
+use std::num::Wrapping;
 use crate::intel8080::hardware::{Intel8080, Register, RegisterPair};
 
 // https://en.wikipedia.org/wiki/Intel_8080#Instruction_set Instruction reference
@@ -48,12 +48,12 @@ fn stax_rp(instruction: u8, intel8080: &mut Intel8080) {
     let reg_a = intel8080.get_register(Register::A);
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
     let index = match rp {
-        0 => intel8080.get_register_pair(RegisterPair::BC) as usize,
-        1 => intel8080.get_register_pair(RegisterPair::DE) as usize,
+        0 => intel8080.get_register_pair(&RegisterPair::BC) as usize,
+        1 => intel8080.get_register_pair(&RegisterPair::DE) as usize,
         _ => panic!("Stack can only target BC (0) or DE (1), target: {rp}"),
     };
 
-    intel8080.memory[index] = intel8080.get_register(Register::A);
+    intel8080.memory[index] = reg_a;
 }
 // Manal page 24, PDF's 30
 // Increases RP by 1. Overflow allowed
@@ -66,6 +66,8 @@ fn inx_rp(instruction: u8, intel8080: &mut Intel8080) {
         3 => RegisterPair::SP,
         _ => panic!("Invalid RP value {rp}")
     };
+    let rp_value = intel8080.get_register_pair(&rp);
+    intel8080.set_register_pair(rp, (Wrapping(rp_value) + Wrapping(1)).0);
 }
 
 fn combine_into_u16(low: u8, high: u8) -> u16 {
@@ -153,7 +155,7 @@ mod tests {
         cpu.memory[0] = 0xFB;
         cpu.memory[1] = 0xA3;
         lxi_rp_data(inst, &mut cpu);
-        assert_eq!(cpu.get_register_pair(RegisterPair::HL), 0xA3FB);
+        assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0xA3FB);
     }
 
     #[test]
@@ -166,5 +168,31 @@ mod tests {
         let ins = 0b00010010;
         stax_rp(ins, &mut cpu);
         assert_eq!(cpu.memory[index as usize], value)
+    }
+    
+    #[test]
+    fn inx() {
+        let mut cpu = Intel8080::default();
+        let ins = 0b00100011;
+        inx_rp(ins, &mut cpu);
+        assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 1)
+    }
+    
+    #[test]
+    fn inx_low_overflow(){
+        let mut cpu = Intel8080::default();
+        let ins = 0b00010011;
+        cpu.set_register(Register::E, 0xFF);
+        inx_rp(ins, &mut cpu);
+        assert_eq!(cpu.get_register_pair(&RegisterPair::DE), 0x0100);        
+    }
+    
+    #[test]
+    fn inx_high_overflow(){
+        let mut cpu = Intel8080::default();
+        let ins = 0b00000011;
+        cpu.set_register_pair(RegisterPair::BC, 0xFFFF);
+        inx_rp(ins, &mut cpu);
+        assert_eq!(0, cpu.get_register_pair(&RegisterPair::BC))
     }
 }
