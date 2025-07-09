@@ -41,13 +41,17 @@ impl Default for Intel8080 {
 }
 
 impl Intel8080 {
-    pub fn get_register_pair(&self, register_pair: &RegisterPair) -> u16 {
+    pub fn get_flags(&self) -> u8 {
+        self.flags
+    }
+    
+    pub fn get_register_pair(&self, register_pair: RegisterPair) -> u16 {
         match register_pair {
             RegisterPair::BC => self.bc,
             RegisterPair::DE => self.de,
             RegisterPair::HL => self.hl,
             RegisterPair::PSW => self.psw,
-            RegisterPair::SP => self.stack_pointer
+            RegisterPair::SP => self.stack_pointer,
         }
     }
 
@@ -70,7 +74,7 @@ impl Intel8080 {
                 self.set_register(Register::FLAGS, high);
                 self.set_register(Register::A, low);
             }
-            RegisterPair::SP => self.stack_pointer = value
+            RegisterPair::SP => self.stack_pointer = value,
         }
     }
     pub fn get_register(&self, register: Register) -> u8 {
@@ -93,12 +97,11 @@ impl Intel8080 {
     }
 
     pub fn set_register(&mut self, register: Register, value: u8) {
-        
         if let Register::M = register {
             self.memory[self.hl as usize] = value;
-            return
+            return;
         }
-        
+
         let (mut index, paired, high_byte) = Register::get_pair_data(register);
 
         let paired_pointer = match &paired {
@@ -106,9 +109,9 @@ impl Intel8080 {
             RegisterPair::BC => &mut self.bc,
             RegisterPair::DE => &mut self.de,
             RegisterPair::HL => &mut self.hl,
-            RegisterPair::SP => panic!("Got SP from a register reference.")
+            RegisterPair::SP => panic!("Got SP from a register reference."),
         };
-        
+
         Self::update_paired_register(paired_pointer, value as u16, high_byte);
 
         if let RegisterPair::PSW = paired {
@@ -124,7 +127,7 @@ impl Intel8080 {
         self.registers[index] = value;
     }
 
-    pub fn set_status(&mut self, flags: StatusFlags, value: bool) {
+    fn set_status(&mut self, flags: StatusFlags, value: bool) {
         let offset = match flags {
             StatusFlags::S => 7,
             StatusFlags::Z => 6,
@@ -151,7 +154,78 @@ impl Intel8080 {
         let high_byte = (value >> 8) as u8;
         (high_byte, value as u8)
     }
+
+    pub fn set_status_addition(&mut self, register: u8, added: u8){
+        let result = u8::overflowing_add(register, added);
+        let (result, of) = result;
+        set_zero_or_less(self, result);
+        set_auxiliary_carry(self, register, added, result);
+        set_carry(self, of);
+        set_parity(self, result);
+
+        fn set_zero_or_less(slf: &mut Intel8080, result: u8){
+            match result {
+                _ if result == 0 => {
+                    slf.set_status(StatusFlags::Z, true);
+                    slf.set_status(StatusFlags::S, false);
+                }
+                _ if (result >> 7) == 1 => {
+                    slf.set_status(StatusFlags::Z, false);
+                    slf.set_status(StatusFlags::S, true);
+                }
+                _ => {
+                    slf.set_status(StatusFlags::Z, false);
+                    slf.set_status(StatusFlags::S, false);
+                }
+            }
+        }
+
+        fn set_auxiliary_carry(slf: &mut Intel8080, register: u8, added: u8, result: u8){
+            // https://retrocomputing.stackexchange.com/questions/11262/can-someone-explain-this-algorithm-used-to-compute-the-auxiliary-carry-flag
+            // the xor between register and added should be the same as the result, unless there was
+            // a carry bit
+            let aux_carry = ((register ^ added) & 0x10) != (result & 0x10) ;
+            slf.set_status(StatusFlags::AC, aux_carry);
+        }
+
+        fn set_carry(slf: &mut Intel8080, of: bool){
+            slf.set_status(StatusFlags::C, of);
+        }
+
+        fn set_parity(slf: &mut Intel8080, result: u8){
+            let mut count = 0;
+            let mut result = result;
+
+            while result > 0 {
+                // https://www.techiedelight.com/brian-kernighans-algorithm-count-set-bits-integer/
+                // Brian Kernighan algorithm
+                count += 1;
+                result = (result - 1) & result;
+            }
+
+            let is_pair = count & 1 == 0;
+            slf.set_status(StatusFlags::P, is_pair);
+        }
+    }
 }
+
+#[derive(Copy, Clone, Debug)]
+pub enum RegisterPair {
+    BC,
+    DE,
+    HL,
+    PSW,
+    SP,
+}
+#[derive(Debug)]
+pub enum StatusFlags {
+    S,
+    Z,
+    P,
+    C,
+    AC,
+}
+#[derive(Copy, Clone, Debug)]
 pub enum Register {
     B,
     C,
@@ -161,23 +235,7 @@ pub enum Register {
     L,
     M,
     A,
-    FLAGS
-}
-
-pub enum RegisterPair {
-    BC,
-    DE,
-    HL,
-    PSW,
-    SP
-}
-
-pub enum StatusFlags {
-    S,
-    Z,
-    P,
-    C,
-    AC,
+    FLAGS,
 }
 
 impl Register {
@@ -189,9 +247,10 @@ impl Register {
             Register::E => (3, RegisterPair::DE, false),
             Register::H => (4, RegisterPair::HL, true),
             Register::L => (5, RegisterPair::HL, false),
+            // Associated 10 so it will crash in case accessed
             Register::FLAGS => (10, RegisterPair::PSW, true),
             Register::A => (7, RegisterPair::PSW, false),
-            Register::M => panic!("M is not associated to a pair")
+            Register::M => panic!("M is not associated to a pair"),
         }
     }
 }
@@ -234,7 +293,7 @@ pub mod tests {
         cpu.set_register(Register::M, 200);
         assert_eq!(cpu.get_register(Register::M), 200);
     }
-    
+
     #[test]
     fn set_hl_after_m() {
         let mut cpu = Intel8080::default();
@@ -262,7 +321,7 @@ pub mod tests {
     fn set_register_pair() {
         let mut cpu = Intel8080::default();
         cpu.set_register_pair(RegisterPair::PSW, 0xBC10);
-        assert_eq!(cpu.get_register_pair(&RegisterPair::PSW), 0xBC10);
+        assert_eq!(cpu.get_register_pair(RegisterPair::PSW), 0xBC10);
     }
 
     #[test]
@@ -277,5 +336,26 @@ pub mod tests {
         let mut cpu = Intel8080::default();
         cpu.set_register_pair(RegisterPair::BC, 0xFCBA);
         assert_eq!(cpu.get_register(Register::C), 0xBA);
+    }
+
+    #[test]
+    fn set_status_addition_negative(){
+        let mut cpu = Intel8080::default();
+        cpu.set_status_addition(0b10101000, 1);
+        assert_eq!(cpu.flags, 0b10000110)
+    }
+
+    #[test]
+    fn set_status_addition_positive(){
+        let mut cpu = Intel8080::default();
+        cpu.set_status_addition(0b00101100, 1);
+        assert_eq!(cpu.flags, 0b00000110)
+    }
+
+    #[test]
+    fn set_status_addition_zero(){
+        let mut cpu = Intel8080::default();
+        cpu.set_status_addition(255, 1);
+        assert_eq!(cpu.flags, 0b01010111);
     }
 }

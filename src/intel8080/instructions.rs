@@ -19,6 +19,10 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::RP) == 3 => {
             inx_rp(instruction, intel8080);
         }
+        // 0b00DDD100
+        _ if InstructionVars::negate(instruction, InstructionVars::DDD) == 4 => {
+            inr_ddd(instruction, intel8080);
+        }
         _ => {}
     }
 }
@@ -48,8 +52,8 @@ fn stax_rp(instruction: u8, intel8080: &mut Intel8080) {
     let reg_a = intel8080.get_register(Register::A);
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
     let index = match rp {
-        0 => intel8080.get_register_pair(&RegisterPair::BC) as usize,
-        1 => intel8080.get_register_pair(&RegisterPair::DE) as usize,
+        0 => intel8080.get_register_pair(RegisterPair::BC) as usize,
+        1 => intel8080.get_register_pair(RegisterPair::DE) as usize,
         _ => panic!("Stack can only target BC (0) or DE (1), target: {rp}"),
     };
 
@@ -66,10 +70,29 @@ fn inx_rp(instruction: u8, intel8080: &mut Intel8080) {
         3 => RegisterPair::SP,
         _ => panic!("Invalid RP value {rp}")
     };
-    let rp_value = intel8080.get_register_pair(&rp);
+    let rp_value = intel8080.get_register_pair(rp);
     intel8080.set_register_pair(rp, (Wrapping(rp_value) + Wrapping(1)).0);
 }
-
+// Manual page 15, PDF's 21
+// Increment register or memory. DDD = DDD + 1
+fn inr_ddd(instruction: u8, intel8080: &mut Intel8080) {
+    let ddd = InstructionVars::get(instruction, InstructionVars::DDD);
+    let register = match ddd {
+        0 => Register::B,
+        1 => Register::C,
+        2 => Register::D,
+        3 => Register::E,
+        4 => Register::H,
+        5 => Register::L,
+        6 => Register::M,
+        7 => Register::A,
+        _ => panic!("Got value higher than 7 for DDD {ddd}")
+    };
+    let register_value = intel8080.get_register(register);
+    let (new_value, _) = u8::overflowing_add(register_value, 1);
+    intel8080.set_register(register, new_value);
+    intel8080.set_status_addition(register_value, 1);
+}
 fn combine_into_u16(low: u8, high: u8) -> u16 {
     let mut combined = 0;
     combined |= (high as u16) << 8;
@@ -97,7 +120,7 @@ impl InstructionVars {
     }
 
     fn get(instruction: u8, var: InstructionVars) -> u8 {
-        let mut shift;
+        let shift;
         let neg = match var {
             InstructionVars::RP | InstructionVars::CC => {
                 shift = 4;
@@ -155,7 +178,7 @@ mod tests {
         cpu.memory[0] = 0xFB;
         cpu.memory[1] = 0xA3;
         lxi_rp_data(inst, &mut cpu);
-        assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0xA3FB);
+        assert_eq!(cpu.get_register_pair(RegisterPair::HL), 0xA3FB);
     }
 
     #[test]
@@ -169,30 +192,85 @@ mod tests {
         stax_rp(ins, &mut cpu);
         assert_eq!(cpu.memory[index as usize], value)
     }
-    
+
     #[test]
     fn inx() {
         let mut cpu = Intel8080::default();
         let ins = 0b00100011;
         inx_rp(ins, &mut cpu);
-        assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 1)
+        assert_eq!(cpu.get_register_pair(RegisterPair::HL), 1)
     }
-    
+
     #[test]
-    fn inx_low_overflow(){
+    fn inx_low_overflow() {
         let mut cpu = Intel8080::default();
         let ins = 0b00010011;
         cpu.set_register(Register::E, 0xFF);
         inx_rp(ins, &mut cpu);
-        assert_eq!(cpu.get_register_pair(&RegisterPair::DE), 0x0100);        
+        assert_eq!(cpu.get_register_pair(RegisterPair::DE), 0x0100);
     }
-    
+
     #[test]
-    fn inx_high_overflow(){
+    fn inx_high_overflow() {
         let mut cpu = Intel8080::default();
         let ins = 0b00000011;
         cpu.set_register_pair(RegisterPair::BC, 0xFFFF);
         inx_rp(ins, &mut cpu);
-        assert_eq!(0, cpu.get_register_pair(&RegisterPair::BC))
+        assert_eq!(0, cpu.get_register_pair(RegisterPair::BC))
+    }
+
+    #[test]
+    fn inr_value() {
+        let mut cpu = Intel8080::default();
+        let ins = 0b00001100;
+        cpu.set_register(Register::C, 0x20);
+        inr_ddd(ins, &mut cpu);
+        assert_eq!(cpu.get_register(Register::C), 0x21)
+    }
+
+    #[test]
+    fn inr_status() {
+        let mut cpu = Intel8080::default();
+        let ins = 0b00000100;
+        cpu.set_register(Register::B, 0x20);
+        inr_ddd(ins, &mut cpu);
+        assert_eq!(cpu.get_flags(), 0b00000110)
+    }
+
+    #[test]
+    fn inr_carry() {
+        let mut cpu = Intel8080::default();
+        let ins = 0b00010100;
+        cpu.set_register(Register::D, 255);
+        inr_ddd(ins, &mut cpu);
+        assert_eq!(cpu.get_flags(), 0b01010111);
+    }
+
+    #[test]
+    fn inr_aux_carry() {
+        let mut cpu = Intel8080::default();
+        let ins = 0b00011100;
+        cpu.set_register(Register::E, 0xF);
+        inr_ddd(ins, &mut cpu);
+        assert_eq!(cpu.get_flags(), 0b00010010);
+    }
+    
+    #[test]
+    fn inr_parity() {
+        let mut cpu = Intel8080::default();
+        let ins = 0b00100100;
+        cpu.set_register(Register::H, 0b11001110);
+        inr_ddd(ins, &mut cpu);
+        assert_eq!(cpu.get_flags(), 0b010000110);
+    }
+    
+    #[test]
+    fn inr_sign() {
+        let mut cpu = Intel8080::default();
+        let ins = 0b00110100;
+        cpu.set_register_pair(RegisterPair::HL, 0xFF);
+        cpu.set_register(Register::M, -125i8 as u8);
+        inr_ddd(ins, &mut cpu);
+        assert_eq!(cpu.get_flags(), 0b10000110);
     }
 }
