@@ -44,7 +44,7 @@ impl Intel8080 {
     pub fn get_flags(&self) -> u8 {
         self.flags
     }
-    
+
     pub fn get_register_pair(&self, register_pair: RegisterPair) -> u16 {
         match register_pair {
             RegisterPair::BC => self.bc,
@@ -155,15 +155,14 @@ impl Intel8080 {
         (high_byte, value as u8)
     }
 
-    pub fn set_status_addition(&mut self, register: u8, added: u8){
-        let result = u8::overflowing_add(register, added);
-        let (result, of) = result;
+    pub fn set_status_add(&mut self, register: u8, add: u8) {
+        let result = u8::overflowing_add(register, add);
+        let (result, _) = result;
         set_zero_or_less(self, result);
-        set_auxiliary_carry(self, register, added, result);
-        set_carry(self, of);
+        set_auxiliary_carry(self, register, add, result);
         set_parity(self, result);
 
-        fn set_zero_or_less(slf: &mut Intel8080, result: u8){
+        fn set_zero_or_less(slf: &mut Intel8080, result: u8) {
             match result {
                 _ if result == 0 => {
                     slf.set_status(StatusFlags::Z, true);
@@ -180,19 +179,15 @@ impl Intel8080 {
             }
         }
 
-        fn set_auxiliary_carry(slf: &mut Intel8080, register: u8, added: u8, result: u8){
+        fn set_auxiliary_carry(slf: &mut Intel8080, register: u8, added: u8, result: u8) {
             // https://retrocomputing.stackexchange.com/questions/11262/can-someone-explain-this-algorithm-used-to-compute-the-auxiliary-carry-flag
             // the xor between register and added should be the same as the result, unless there was
             // a carry bit
-            let aux_carry = ((register ^ added) & 0x10) != (result & 0x10) ;
+            let aux_carry = ((register ^ added) & 0x10) != (result & 0x10);
             slf.set_status(StatusFlags::AC, aux_carry);
         }
-
-        fn set_carry(slf: &mut Intel8080, of: bool){
-            slf.set_status(StatusFlags::C, of);
-        }
-
-        fn set_parity(slf: &mut Intel8080, result: u8){
+        
+        fn set_parity(slf: &mut Intel8080, result: u8) {
             let mut count = 0;
             let mut result = result;
 
@@ -206,6 +201,13 @@ impl Intel8080 {
             let is_pair = count & 1 == 0;
             slf.set_status(StatusFlags::P, is_pair);
         }
+    }
+    
+    pub fn set_status_sub(&mut self, register: u8, sub:u8){
+        self.set_status_add(register, !sub + 1);
+        let status = (self.flags & 0b00010000) >> 4;
+        let status = if status == 1 { true } else { false };
+        self.set_status(StatusFlags::AC, !status)
     }
 }
 
@@ -251,6 +253,20 @@ impl Register {
             Register::FLAGS => (10, RegisterPair::PSW, true),
             Register::A => (7, RegisterPair::PSW, false),
             Register::M => panic!("M is not associated to a pair"),
+        }
+    }
+    
+    pub fn get_ddd(ddd: u8) -> Register {
+        match ddd {
+            0 => Register::B,
+            1 => Register::C,
+            2 => Register::D,
+            3 => Register::E,
+            4 => Register::H,
+            5 => Register::L,
+            6 => Register::M,
+            7 => Register::A,
+            _ => panic!("Got value higher than 7 for DDD {ddd}"),
         }
     }
 }
@@ -339,23 +355,23 @@ pub mod tests {
     }
 
     #[test]
-    fn set_status_addition_negative(){
+    fn set_status_addition_negative() {
         let mut cpu = Intel8080::default();
-        cpu.set_status_addition(0b10101000, 1);
+        cpu.set_status_add(0b10101000, 1);
         assert_eq!(cpu.flags, 0b10000110)
     }
 
     #[test]
-    fn set_status_addition_positive(){
+    fn set_status_addition_positive() {
         let mut cpu = Intel8080::default();
-        cpu.set_status_addition(0b00101100, 1);
+        cpu.set_status_add(0b00101100, 1);
         assert_eq!(cpu.flags, 0b00000110)
     }
 
     #[test]
-    fn set_status_addition_zero(){
+    fn set_status_addition_zero() {
         let mut cpu = Intel8080::default();
-        cpu.set_status_addition(255, 1);
+        cpu.set_status_add(255, 1);
         assert_eq!(cpu.flags, 0b01010111);
     }
 }
