@@ -50,9 +50,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0x17 => {
             ral(intel8080);
         }
-        _ if instruction == 0x1F => {
-            rar(intel8080);
-        }
+        // _ if instruction == 0x1F => {
+        //     rar(intel8080);
+        // }
         _ => {}
     }
 }
@@ -172,7 +172,14 @@ fn rlc(intel8080: &mut Intel8080){
     intel8080.set_flag(StatusFlags::C, carry);
     intel8080.set_register(Register::A, accumulator.rotate_left(1))
 }
-
+// Manual page 21, PDF's 27
+// Rotate Accumulator Right
+fn rrc(intel8080: &mut Intel8080){
+    let accumulator = intel8080.get_register(&Register::A);
+    let carry = (accumulator & 1) == 1;
+    intel8080.set_flag(StatusFlags::C, carry);
+    intel8080.set_register(Register::A, accumulator.rotate_right(1));
+}
 
 enum InstructionVars {
     RP,
@@ -489,13 +496,23 @@ mod tests {
         dcx_rp(instruction, &mut cpu);
         assert_eq!(0xFFFF, cpu.get_register_pair(&RegisterPair::HL))
     }
-    
+
     #[test]
     fn rlc_t(){
         let mut cpu = Intel8080::default();
-        cpu.set_register(Register::A, 0b10011001);
+        cpu.set_register(Register::A, 0xF2);
         rlc(&mut cpu);
         assert_eq!(cpu.get_flag(StatusFlags::C), true);
-        assert_eq!(cpu.get_register(&Register::A), 0b00110011);
+        assert_eq!(cpu.get_register(&Register::A), 0xE5);
+    }
+
+    #[test]
+    fn rrc_t(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 0xF2);
+        cpu.set_flag(StatusFlags::C, true);
+        rrc(&mut cpu);
+        assert_eq!(cpu.get_flag(StatusFlags::C), false);
+        assert_eq!(cpu.get_register(&Register::A), 0x79)
     }
 }
