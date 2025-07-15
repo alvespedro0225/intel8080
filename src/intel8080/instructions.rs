@@ -33,6 +33,12 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             mvi_ddd_data(instruction, intel8080);
             intel8080.program_counter += 1;
         }
+        _ if InstructionVars::negate(instruction, InstructionVars::RP) == 9 => {
+            dad_rp(instruction, intel8080);
+        }
+        _ if InstructionVars::negate(instruction, InstructionVars::RP) == 10 => {
+            ldax_rp(instruction, intel8080);
+        }
         _ => {}
     }
 }
@@ -45,7 +51,7 @@ fn lxi_rp_data(instruction: u8, intel8080: &mut Intel8080) {
     let (data_low, data_high) = (mem[pc + 1], mem[pc + 2]);
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
     let data = combine_into_u16(data_low, data_high);
-
+    
     match rp {
         0 => intel8080.set_register_pair(RegisterPair::BC, data),
         1 => intel8080.set_register_pair(RegisterPair::DE, data),
@@ -116,16 +122,29 @@ fn dad_rp(instruction: u8, intel8080: &mut Intel8080){
     let hl = intel8080.get_register_pair(&RegisterPair::HL);
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
     let rp = RegisterPair::get_rp(rp);
-    
+
     let (sum, of) = if let RegisterPair::HL = rp {
         (hl << 1, hl >= 32768) // hl >= 32768 checks if msb is set
     } else {
         let rp = intel8080.get_register_pair(&rp);
         u16::overflowing_add(rp, hl)
     };
-    
+
     intel8080.set_flag(StatusFlags::C, of);
     intel8080.set_register_pair(RegisterPair::HL, sum);
+}
+// Manual page 17, PDF's 23
+// Load Accumulator. A = memory[RP]
+fn ldax_rp(instruction: u8, intel8080: &mut Intel8080){
+    let rp = InstructionVars::get(instruction, InstructionVars::RP);
+    
+    if rp > 1 {
+        panic!("Invalid RP value for instruction ldax {rp}")
+    }
+    
+    let rp = RegisterPair::get_rp(rp);
+    let rp = intel8080.get_register_pair(&rp);
+    intel8080.set_register(Register::A, intel8080.memory[rp as usize]);
 }
 fn combine_into_u16(low: u8, high: u8) -> u16 {
     let mut combined = 0;
@@ -372,7 +391,7 @@ mod tests {
     #[test]
     fn dad(){
         let mut cpu = Intel8080::default();
-        let instruction = 0b00001000;
+        let instruction = 0b00001001;
         cpu.set_register_pair(RegisterPair::BC, 0x339F);
         cpu.set_register_pair(RegisterPair::HL, 0xA17B);
         cpu.set_flag(StatusFlags::C, true);
@@ -380,37 +399,55 @@ mod tests {
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0xD51A);
         assert_eq!(cpu.get_flag(StatusFlags::C), false)
     }
-    
+
     #[test]
     fn dad_of(){
         let mut cpu = Intel8080::default();
-        let instruction = 0b00011000;
+        let instruction = 0b00011001;
         cpu.set_register_pair(RegisterPair::HL, 0xFFFF);
         cpu.set_register_pair(RegisterPair::DE, 0xFF);
         dad_rp(instruction, &mut cpu);
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0xFE);
         assert_eq!(cpu.get_flag(StatusFlags::C), true)
     }
-    
+
     #[test]
     fn dad_hl(){
         let mut cpu = Intel8080::default();
-        let instruction = 0b00101000;
+        let instruction = 0b00101001;
         cpu.set_register_pair(RegisterPair::HL, 0xFF);
         cpu.set_flag(StatusFlags::C, true);
         dad_rp(instruction, &mut cpu);
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 2 * 0xFF);
         assert_eq!(cpu.get_flag(StatusFlags::C), false)
     }
-    
+
     #[test]
     fn dad_hl_of(){
         let mut cpu = Intel8080::default();
-        let instruction = 0b00101000;
+        let instruction = 0b00101001;
         cpu.set_register_pair(RegisterPair::HL, 0xF1AB);
         let (res, _) = u16::overflowing_shl(0xF1AB, 1);
         dad_rp(instruction, &mut cpu);
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), res);
         assert_eq!(cpu.get_flag(StatusFlags::C), true)
+    }
+    
+    #[test]
+    fn ldax(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0b00001010;
+        cpu.set_register_pair(RegisterPair::BC, 0xA1);
+        cpu.memory[0xA1] = 0xFF;
+        ldax_rp(instruction, &mut cpu);
+        assert_eq!(0xFF, cpu.get_register(&Register::A))
+    }
+    
+    #[test]
+    #[should_panic]
+    fn ldax_hl(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0b00101010;
+        ldax_rp(instruction, &mut cpu)
     }
 }
