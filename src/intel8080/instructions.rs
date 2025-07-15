@@ -52,11 +52,19 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
 fn lxi_rp_data(instruction: u8, intel8080: &mut Intel8080) {
     let mem = intel8080.memory;
     let pc = intel8080.program_counter as usize;
-    let (data_low, data_high) = (mem[pc + 1], mem[pc + 2]);
+    let (second, third) = (mem[pc + 1], mem[pc + 2]);
+    let rp_value = combine_into_u16(second, third);
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
-    let data = combine_into_u16(data_low, data_high);
     let rp = RegisterPair::get_rp(rp);
-    intel8080.set_register_pair(rp, data);
+    intel8080.set_register_pair(rp, rp_value);
+    
+    fn combine_into_u16(second: u8, third: u8) -> u16 {
+        let second = second as u16;
+        let third = third as u16;
+        let mut value = third << 8;
+        value ^= second;
+        value
+    }
 }
 // Manual page 17, PDF's 23
 // Store Accumulator. memory[RP] = A
@@ -146,13 +154,6 @@ fn dcx_rp(instruction: u8, intel8080: &mut Intel8080) {
     let rp_value = intel8080.get_register_pair(&rp);
     intel8080.set_register_pair(rp, u16::wrapping_sub(rp_value, 1));
 }
-fn combine_into_u16(low: u8, high: u8) -> u16 {
-    let mut combined = 0;
-    combined |= (high as u16) << 8;
-    combined |= low as u16;
-    combined
-}
-
 enum InstructionVars {
     RP,
     CC,
@@ -214,15 +215,7 @@ mod tests {
         let subset = InstructionVars::get(0x38, InstructionVars::DDD);
         assert_eq!(subset, 7)
     }
-
-    #[test]
-    fn combine() {
-        let low: u8 = 0xFF;
-        let high: u8 = 0xAA;
-        let combined = combine_into_u16(low, high);
-        assert_eq!(combined, 0xAAFF);
-    }
-
+    
     #[test]
     fn lxi() {
         let mut cpu = Intel8080::default();
@@ -233,7 +226,7 @@ mod tests {
         lxi_rp_data(inst, &mut cpu);
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0xA3FB);
     }
-
+    
     #[test]
     fn stax() {
         let index = 0x3F16;
@@ -450,7 +443,7 @@ mod tests {
         let instruction = 0b00101010;
         ldax_rp(instruction, &mut cpu)
     }
-    
+
     #[test]
     fn dcr(){
         let mut cpu = Intel8080::default();
@@ -459,7 +452,7 @@ mod tests {
         dcx_rp(instruction, &mut cpu);
         assert_eq!(0xF0, cpu.get_register_pair(&RegisterPair::DE))
     }
-    
+
     #[test]
     fn dcr_low_of(){
         let mut cpu = Intel8080::default();
@@ -468,7 +461,7 @@ mod tests {
         dcx_rp(instruction, &mut cpu);
         assert_eq!(0xFF, cpu.get_register_pair(&RegisterPair::BC))
     }
-    
+
     #[test]
     fn dcr_high_of(){
         let mut cpu = Intel8080::default();

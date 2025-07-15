@@ -56,23 +56,23 @@ impl Intel8080 {
     }
 
     pub fn set_register_pair(&mut self, register_pair: RegisterPair, value: u16) {
-        let (high, low) = Self::get_register_pair_subsets(value);
+        let (first, second) = Self::get_register_pair_subsets(value);
         match register_pair {
             RegisterPair::BC => {
-                self.set_register(Register::B, high);
-                self.set_register(Register::C, low)
+                self.set_register(Register::B, first);
+                self.set_register(Register::C, second)
             }
             RegisterPair::DE => {
-                self.set_register(Register::D, high);
-                self.set_register(Register::E, low);
+                self.set_register(Register::D, first);
+                self.set_register(Register::E, second);
             }
             RegisterPair::HL => {
-                self.set_register(Register::H, high);
-                self.set_register(Register::L, low);
+                self.set_register(Register::H, first);
+                self.set_register(Register::L, second);
             }
             RegisterPair::PSW => {
-                self.set_register(Register::FLAGS, high);
-                self.set_register(Register::A, low);
+                self.set_register(Register::FLAGS, first);
+                self.set_register(Register::A, second);
             }
             RegisterPair::SP => self.stack_pointer = value,
         }
@@ -161,8 +161,8 @@ impl Intel8080 {
     }
 
     fn get_register_pair_subsets(value: u16) -> (u8, u8) {
-        let high_byte = (value >> 8) as u8;
-        (high_byte, value as u8)
+        let first_byte = (value >> 8) as u8;
+        (first_byte, value as u8)
     }
 
     pub fn set_status_add(&mut self, register: u8, add: u8) {
