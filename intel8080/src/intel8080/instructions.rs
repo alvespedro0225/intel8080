@@ -208,11 +208,12 @@ fn rar(intel8080: &mut Intel8080) {
 }
 // Manual page 30, PDF's 36
 // Store H and L Directly
-fn shld(intel8080: &mut Intel8080){
+fn shld(intel8080: &mut Intel8080) {
     let pc = intel8080.program_counter as usize;
-    let (second, third) = (intel8080.memory[(pc + 1)], intel8080.memory[(pc + 2)]);
-    let address = combine_into_u16(second, third);
-
+    let (second, third) = (intel8080.memory[pc + 1], intel8080.memory[pc + 2]);
+    let address = combine_into_u16(second, third) as usize;
+    intel8080.memory[address] = intel8080.get_register(&Register::L);
+    intel8080.memory[address + 1] = intel8080.get_register(&Register::H);
 }
 
 fn combine_into_u16(second: u8, third: u8) -> u16 {
@@ -277,7 +278,7 @@ mod tests {
         let negated = InstructionVars::negate(ins, InstructionVars::DDD);
         assert_eq!(0b11000111, negated)
     }
-    
+
     #[test]
     fn subset() {
         let subset = InstructionVars::get(0x38, InstructionVars::DDD);
@@ -285,12 +286,12 @@ mod tests {
     }
 
     #[test]
-    fn combine(){
+    fn combine() {
         let second = 0xFF;
         let third = 0x1A;
         assert_eq!(combine_into_u16(second, third), 0x1AFF)
     }
-    
+
     #[test]
     fn lxi() {
         let mut cpu = Intel8080::default();
@@ -574,12 +575,24 @@ mod tests {
     }
 
     #[test]
-    fn rar_t(){
+    fn rar_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0x6A);
         cpu.set_flag(StatusFlags::C, true);
         rar(&mut cpu);
         assert_eq!(cpu.get_flag(StatusFlags::C), false);
         assert_eq!(cpu.get_register(&Register::A), 0xB5);
+    }
+
+    #[test]
+    fn shld_t() {
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::H, 0xAE);
+        cpu.set_register(Register::L, 0x29);
+        cpu.memory[1] = 0x0A;
+        cpu.memory[2] = 0x01;
+        shld(&mut cpu);
+        assert_eq!(cpu.memory[0x10A], 0x29);
+        assert_eq!(cpu.memory[0x10A + 1], 0xAE)
     }
 }
