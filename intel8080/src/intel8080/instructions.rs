@@ -180,7 +180,17 @@ fn rrc(intel8080: &mut Intel8080){
     intel8080.set_flag(StatusFlags::C, carry);
     intel8080.set_register(Register::A, accumulator.rotate_right(1));
 }
-
+// Manual page 22, PDF's 28
+// Rotate Accumulator Left Through Carry
+fn ral(intel8080: &mut Intel8080){
+    let mut accumulator = intel8080.get_register(&Register::A);
+    let carry = if intel8080.get_flag(StatusFlags::C) { 1 } else { 0 };
+    let new_carry = accumulator >> 7 == 1;
+    intel8080.set_flag(StatusFlags::C, new_carry);
+    accumulator <<= 1; 
+    accumulator ^= carry;
+    intel8080.set_register(Register::A, accumulator);
+}
 enum InstructionVars {
     RP,
     CC,
@@ -514,5 +524,14 @@ mod tests {
         rrc(&mut cpu);
         assert_eq!(cpu.get_flag(StatusFlags::C), false);
         assert_eq!(cpu.get_register(&Register::A), 0x79)
+    }
+    
+    #[test]
+    fn ral_t(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 0xB5);
+        ral(&mut cpu);
+        assert_eq!(cpu.get_flag(StatusFlags::C), true);
+        assert_eq!(cpu.get_register(&Register::A), 0x6A);
     }
 }
