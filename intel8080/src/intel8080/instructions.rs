@@ -50,9 +50,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0x17 => {
             ral(intel8080);
         }
-        // _ if instruction == 0x1F => {
-        //     rar(intel8080);
-        // }
+        _ if instruction == 0x1F => {
+            rar(intel8080);
+        }
         _ => {}
     }
 }
@@ -67,7 +67,7 @@ fn lxi_rp_data(instruction: u8, intel8080: &mut Intel8080) {
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
     let rp = RegisterPair::get_rp(rp);
     intel8080.set_register_pair(rp, rp_value);
-    
+
     fn combine_into_u16(second: u8, third: u8) -> u16 {
         let second = second as u16;
         let third = third as u16;
@@ -166,7 +166,7 @@ fn dcx_rp(instruction: u8, intel8080: &mut Intel8080) {
 }
 // Manual page 21, PDF's 27
 // Rotate Accumulator Left
-fn rlc(intel8080: &mut Intel8080){
+fn rlc(intel8080: &mut Intel8080) {
     let accumulator = intel8080.get_register(&Register::A);
     let carry = accumulator >> 7 == 1;
     intel8080.set_flag(StatusFlags::C, carry);
@@ -174,7 +174,7 @@ fn rlc(intel8080: &mut Intel8080){
 }
 // Manual page 21, PDF's 27
 // Rotate Accumulator Right
-fn rrc(intel8080: &mut Intel8080){
+fn rrc(intel8080: &mut Intel8080) {
     let accumulator = intel8080.get_register(&Register::A);
     let carry = (accumulator & 1) == 1;
     intel8080.set_flag(StatusFlags::C, carry);
@@ -182,13 +182,32 @@ fn rrc(intel8080: &mut Intel8080){
 }
 // Manual page 22, PDF's 28
 // Rotate Accumulator Left Through Carry
-fn ral(intel8080: &mut Intel8080){
+fn ral(intel8080: &mut Intel8080) {
     let mut accumulator = intel8080.get_register(&Register::A);
-    let carry = if intel8080.get_flag(StatusFlags::C) { 1 } else { 0 };
+    let carry = if intel8080.get_flag(StatusFlags::C) {
+        1
+    } else {
+        0
+    };
     let new_carry = accumulator >> 7 == 1;
     intel8080.set_flag(StatusFlags::C, new_carry);
-    accumulator <<= 1; 
+    accumulator <<= 1;
     accumulator ^= carry;
+    intel8080.set_register(Register::A, accumulator);
+}
+// Manual page 22, PDF's 28
+// Rotate Accumulator Right Through Carry
+fn rar(intel8080: &mut Intel8080) {
+    let mut accumulator = intel8080.get_register(&Register::A);
+    let carry = if intel8080.get_flag(StatusFlags::C) {
+        1
+    } else {
+        0
+    };
+    let new_carry = accumulator & 1 == 1;
+    intel8080.set_flag(StatusFlags::C, new_carry);
+    accumulator >>= 1;
+    accumulator ^= carry << 7;
     intel8080.set_register(Register::A, accumulator);
 }
 enum InstructionVars {
@@ -252,7 +271,7 @@ mod tests {
         let subset = InstructionVars::get(0x38, InstructionVars::DDD);
         assert_eq!(subset, 7)
     }
-    
+
     #[test]
     fn lxi() {
         let mut cpu = Intel8080::default();
@@ -263,7 +282,7 @@ mod tests {
         lxi_rp_data(inst, &mut cpu);
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0xA3FB);
     }
-    
+
     #[test]
     fn stax() {
         let index = 0x3F16;
@@ -482,7 +501,7 @@ mod tests {
     }
 
     #[test]
-    fn dcr(){
+    fn dcr() {
         let mut cpu = Intel8080::default();
         cpu.set_register_pair(RegisterPair::DE, 0xF1);
         let instruction = 0b00011011;
@@ -491,7 +510,7 @@ mod tests {
     }
 
     #[test]
-    fn dcr_low_of(){
+    fn dcr_low_of() {
         let mut cpu = Intel8080::default();
         cpu.set_register_pair(RegisterPair::BC, 0x100);
         let instruction = 0b00001011;
@@ -500,7 +519,7 @@ mod tests {
     }
 
     #[test]
-    fn dcr_high_of(){
+    fn dcr_high_of() {
         let mut cpu = Intel8080::default();
         let instruction = 0b00101011;
         dcx_rp(instruction, &mut cpu);
@@ -508,7 +527,7 @@ mod tests {
     }
 
     #[test]
-    fn rlc_t(){
+    fn rlc_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0xF2);
         rlc(&mut cpu);
@@ -517,7 +536,7 @@ mod tests {
     }
 
     #[test]
-    fn rrc_t(){
+    fn rrc_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0xF2);
         cpu.set_flag(StatusFlags::C, true);
@@ -525,13 +544,23 @@ mod tests {
         assert_eq!(cpu.get_flag(StatusFlags::C), false);
         assert_eq!(cpu.get_register(&Register::A), 0x79)
     }
-    
+
     #[test]
-    fn ral_t(){
+    fn ral_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0xB5);
         ral(&mut cpu);
         assert_eq!(cpu.get_flag(StatusFlags::C), true);
         assert_eq!(cpu.get_register(&Register::A), 0x6A);
+    }
+
+    #[test]
+    fn rar_t(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 0x6A);
+        cpu.set_flag(StatusFlags::C, true);
+        rar(&mut cpu);
+        assert_eq!(cpu.get_flag(StatusFlags::C), false);
+        assert_eq!(cpu.get_register(&Register::A), 0xB5);
     }
 }
