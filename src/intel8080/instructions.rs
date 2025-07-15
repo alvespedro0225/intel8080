@@ -1,5 +1,6 @@
 use crate::intel8080::hardware::{Intel8080, Register, RegisterPair, StatusFlags};
 use std::num::Wrapping;
+use crate::intel8080::instructions;
 
 // https://en.wikipedia.org/wiki/Intel_8080#Instruction_set Instruction reference
 // https://altairclone.com/downloads/manuals/8080%20Programmers%20Manual.pdf 8080 manual
@@ -140,7 +141,10 @@ fn ldax_rp(instruction: u8, intel8080: &mut Intel8080) {
 // Manual page 24, PDF's 30
 // Decrement Register Pair. RP -= 1
 fn dcx_rp(instruction: u8, intel8080: &mut Intel8080) {
-    
+    let rp = InstructionVars::get(instruction, InstructionVars::RP);
+    let rp = RegisterPair::get_rp(rp);
+    let rp_value = intel8080.get_register_pair(&rp);
+    intel8080.set_register_pair(rp, u16::wrapping_sub(rp_value, 1));
 }
 fn combine_into_u16(low: u8, high: u8) -> u16 {
     let mut combined = 0;
@@ -445,5 +449,31 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0b00101010;
         ldax_rp(instruction, &mut cpu)
+    }
+    
+    #[test]
+    fn dcr(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register_pair(RegisterPair::DE, 0xF1);
+        let instruction = 0b00011011;
+        dcx_rp(instruction, &mut cpu);
+        assert_eq!(0xF0, cpu.get_register_pair(&RegisterPair::DE))
+    }
+    
+    #[test]
+    fn dcr_low_of(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register_pair(RegisterPair::BC, 0x100);
+        let instruction = 0b00001011;
+        dcx_rp(instruction, &mut cpu);
+        assert_eq!(0xFF, cpu.get_register_pair(&RegisterPair::BC))
+    }
+    
+    #[test]
+    fn dcr_high_of(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0b00101011;
+        dcx_rp(instruction, &mut cpu);
+        assert_eq!(0xFFFF, cpu.get_register_pair(&RegisterPair::HL))
     }
 }
