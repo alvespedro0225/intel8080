@@ -166,51 +166,50 @@ impl Intel8080 {
         (first_byte, value as u8)
     }
 
+    pub fn set_zero_or_less(&mut self, result: u8) {
+        match result {
+            _ if result == 0 => {
+                self.set_flag(StatusFlags::Z, true);
+                self.set_flag(StatusFlags::S, false);
+            }
+            _ if (result >> 7) == 1 => {
+                self.set_flag(StatusFlags::Z, false);
+                self.set_flag(StatusFlags::S, true);
+            }
+            _ => {
+                self.set_flag(StatusFlags::Z, false);
+                self.set_flag(StatusFlags::S, false);
+            }
+        }
+    }
+    
+    pub fn set_parity(&mut self, result: u8) {
+        let mut count = 0;
+        let mut result = result;
+
+        while result > 0 {
+            // https://www.techiedelight.com/brian-kernighans-algorithm-count-set-bits-integer/
+            // Brian Kernighan algorithm
+            count += 1;
+            result = (result - 1) & result;
+        }
+
+        let is_pair = count & 1 == 0;
+        self.set_flag(StatusFlags::P, is_pair);
+    }
     pub fn set_status_add(&mut self, register: u8, add: u8) {
         let result = u8::overflowing_add(register, add);
         let (result, _) = result;
-        set_zero_or_less(self, result);
+        self.set_zero_or_less(result);
+        self.set_parity(result);
         set_auxiliary_carry(self, register, add, result);
-        set_parity(self, result);
-
-        fn set_zero_or_less(slf: &mut Intel8080, result: u8) {
-            match result {
-                _ if result == 0 => {
-                    slf.set_flag(StatusFlags::Z, true);
-                    slf.set_flag(StatusFlags::S, false);
-                }
-                _ if (result >> 7) == 1 => {
-                    slf.set_flag(StatusFlags::Z, false);
-                    slf.set_flag(StatusFlags::S, true);
-                }
-                _ => {
-                    slf.set_flag(StatusFlags::Z, false);
-                    slf.set_flag(StatusFlags::S, false);
-                }
-            }
-        }
-
+        
         fn set_auxiliary_carry(slf: &mut Intel8080, register: u8, added: u8, result: u8) {
             // https://retrocomputing.stackexchange.com/questions/11262/can-someone-explain-this-algorithm-used-to-compute-the-auxiliary-carry-flag
             // the xor between register and added should be the same as the result, unless there was
             // a carry bit
             let aux_carry = ((register ^ added) & 0x10) != (result & 0x10);
             slf.set_flag(StatusFlags::AC, aux_carry);
-        }
-        
-        fn set_parity(slf: &mut Intel8080, result: u8) {
-            let mut count = 0;
-            let mut result = result;
-
-            while result > 0 {
-                // https://www.techiedelight.com/brian-kernighans-algorithm-count-set-bits-integer/
-                // Brian Kernighan algorithm
-                count += 1;
-                result = (result - 1) & result;
-            }
-
-            let is_pair = count & 1 == 0;
-            slf.set_flag(StatusFlags::P, is_pair);
         }
     }
     
@@ -219,7 +218,7 @@ impl Intel8080 {
         // flips AC flag
         self.flags ^= 0b00010000;
     }
-    
+
     pub fn execute_next_instruction(&mut self){
         let instruction = self.memory[self.program_counter as usize];
         instructions::handle_instruction(instruction, self)

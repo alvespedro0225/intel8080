@@ -56,6 +56,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0x22 => {
             shld(intel8080);
         }
+        _ if instruction == 0x27 => {
+            daa(intel8080);
+        }
         _ => {}
     }
     intel8080.program_counter += 1;
@@ -214,6 +217,32 @@ fn shld(intel8080: &mut Intel8080) {
     let address = combine_into_u16(second, third) as usize;
     intel8080.memory[address] = intel8080.get_register(&Register::L);
     intel8080.memory[address + 1] = intel8080.get_register(&Register::H);
+}
+
+fn daa(intel8080: &mut Intel8080){
+    let mut accumulator = intel8080.get_register(&Register::A);
+    let right = accumulator & 0xF;
+
+    if right > 9 {
+        accumulator += 6;
+        intel8080.set_flag(StatusFlags::AC, true);
+    } else if intel8080.get_flag(StatusFlags::AC) {
+        accumulator += 6;
+        intel8080.set_flag(StatusFlags::AC, false);
+    }
+
+    let left = (accumulator & 0xF0) >> 4;
+
+    if left > 9 {
+        accumulator += 6 << 4;
+        intel8080.set_flag(StatusFlags::C, true);
+    } else if intel8080.get_flag(StatusFlags::C) {
+        accumulator += 6 << 4;
+        intel8080.set_flag(StatusFlags::C, false);
+    }
+
+    intel8080.set_register(Register::A, accumulator);
+
 }
 
 fn combine_into_u16(second: u8, third: u8) -> u16 {
