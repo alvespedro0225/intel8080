@@ -234,7 +234,7 @@ fn daa(intel8080: &mut Intel8080){
     let left = (accumulator & 0xF0) >> 4;
 
     if left > 9 {
-        accumulator += 6 << 4;
+        accumulator = u8::wrapping_add(accumulator, 6 << 4);
         intel8080.set_flag(StatusFlags::C, true);
     } else if intel8080.get_flag(StatusFlags::C) {
         accumulator += 6 << 4;
@@ -242,7 +242,8 @@ fn daa(intel8080: &mut Intel8080){
     }
 
     intel8080.set_register(Register::A, accumulator);
-
+    intel8080.set_parity(accumulator);
+    intel8080.set_zero_or_less(accumulator);
 }
 
 fn combine_into_u16(second: u8, third: u8) -> u16 {
@@ -623,5 +624,14 @@ mod tests {
         shld(&mut cpu);
         assert_eq!(cpu.memory[0x10A], 0x29);
         assert_eq!(cpu.memory[0x10A + 1], 0xAE)
+    }
+
+    #[test]
+    fn daa_t(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 0x9B);
+        daa(&mut cpu);
+        assert_eq!(cpu.get_flags(), 0b00010011);
+        assert_eq!(cpu.get_register(&Register::A), 1)
     }
 }
