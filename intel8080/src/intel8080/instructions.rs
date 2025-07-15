@@ -634,4 +634,13 @@ mod tests {
         assert_eq!(cpu.get_flags(), 0b00010011);
         assert_eq!(cpu.get_register(&Register::A), 1)
     }
+    
+    #[test]
+    fn daa_parity(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 0x9D);
+        daa(&mut cpu);
+        assert_eq!(cpu.get_flags(), 0b00010111);
+        assert_eq!(cpu.get_register(&Register::A), 3);
+    }
 }
