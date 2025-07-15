@@ -39,6 +39,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::RP) == 10 => {
             ldax_rp(instruction, intel8080);
         }
+        _ if InstructionVars::negate(instruction, InstructionVars::RP) == 11 => {
+            dcx_rp(instruction, intel8080);
+        }
         _ => {}
     }
 }
@@ -55,29 +58,29 @@ fn lxi_rp_data(instruction: u8, intel8080: &mut Intel8080) {
     intel8080.set_register_pair(rp, data);
 }
 // Manual page 17, PDF's 23
-// Stores register A's value at memory[RP], where RP is BC or DE
+// Store Accumulator. memory[RP] = A
 fn stax_rp(instruction: u8, intel8080: &mut Intel8080) {
     let reg_a = intel8080.get_register(&Register::A);
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
-    
+
     if rp > 1 {
         panic!("Invalid RP value for instruction stax {rp}")
     }
-    
+
     let rp = RegisterPair::get_rp(rp);
     let index = intel8080.get_register_pair(&rp) as usize;
     intel8080.memory[index] = reg_a;
 }
 // Manal page 24, PDF's 30
-// Increases RP by 1. Overflow allowed
+// Increases RP by 1. RP += 1
 fn inx_rp(instruction: u8, intel8080: &mut Intel8080) {
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
     let rp = RegisterPair::get_rp(rp);
     let rp_value = intel8080.get_register_pair(&rp);
-    intel8080.set_register_pair(rp, (Wrapping(rp_value) + Wrapping(1)).0);
+    intel8080.set_register_pair(rp, u16::wrapping_add(rp_value, 1));
 }
 // Manual page 15, PDF's 21
-// Increment register or memory. DDD = DDD + 1
+// Increment register or memory. DDD += 1
 fn inr_ddd(instruction: u8, intel8080: &mut Intel8080) {
     let ddd = InstructionVars::get(instruction, InstructionVars::DDD);
     let register = Register::get_ddd(ddd);
@@ -87,7 +90,7 @@ fn inr_ddd(instruction: u8, intel8080: &mut Intel8080) {
     intel8080.set_status_add(register_value, 1);
 }
 // Manual page 15, PDF's 21
-// Decrement register or memory. DDD = DDD - 1
+// Decrement register or memory. DDD -= 1
 fn dcr_ddd(instruction: u8, intel8080: &mut Intel8080) {
     let ddd = InstructionVars::get(instruction, InstructionVars::DDD);
     let register = Register::get_ddd(ddd);
@@ -98,16 +101,15 @@ fn dcr_ddd(instruction: u8, intel8080: &mut Intel8080) {
 }
 // Manual page 26, PDF's 32
 // Move immediate data. DDD = Data
-fn mvi_ddd_data(instruction: u8, intel8080: &mut Intel8080){
+fn mvi_ddd_data(instruction: u8, intel8080: &mut Intel8080) {
     let ddd = InstructionVars::get(instruction, InstructionVars::DDD);
     let ddd = Register::get_ddd(ddd);
     let data = intel8080.memory[(intel8080.program_counter + 1) as usize];
     intel8080.set_register(ddd, data);
-
 }
 // Manual page 24, PDF's 30
 // Double add. HL += RP
-fn dad_rp(instruction: u8, intel8080: &mut Intel8080){
+fn dad_rp(instruction: u8, intel8080: &mut Intel8080) {
     let hl = intel8080.get_register_pair(&RegisterPair::HL);
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
     let rp = RegisterPair::get_rp(rp);
@@ -124,16 +126,21 @@ fn dad_rp(instruction: u8, intel8080: &mut Intel8080){
 }
 // Manual page 17, PDF's 23
 // Load Accumulator. A = memory[RP]
-fn ldax_rp(instruction: u8, intel8080: &mut Intel8080){
+fn ldax_rp(instruction: u8, intel8080: &mut Intel8080) {
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
-    
+
     if rp > 1 {
         panic!("Invalid RP value for instruction ldax {rp}")
     }
-    
+
     let rp = RegisterPair::get_rp(rp);
     let rp = intel8080.get_register_pair(&rp);
     intel8080.set_register(Register::A, intel8080.memory[rp as usize]);
+}
+// Manual page 24, PDF's 30
+// Decrement Register Pair. RP -= 1
+fn dcx_rp(instruction: u8, intel8080: &mut Intel8080) {
+    
 }
 fn combine_into_u16(low: u8, high: u8) -> u16 {
     let mut combined = 0;
@@ -271,7 +278,7 @@ mod tests {
     }
 
     #[test]
-    fn inr_value_of(){
+    fn inr_value_of() {
         let mut cpu = Intel8080::default();
         let ins = 0b00001100;
         cpu.set_register(Register::C, 0xFF);
@@ -317,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn dcr_value(){
+    fn dcr_value() {
         let mut cpu = Intel8080::default();
         let ins = 0b00000101;
         cpu.set_register(Register::B, 10);
@@ -326,7 +333,7 @@ mod tests {
     }
 
     #[test]
-    fn dcr_value_of(){
+    fn dcr_value_of() {
         let mut cpu = Intel8080::default();
         let ins = 0b00001101;
         dcr_ddd(ins, &mut cpu);
@@ -334,7 +341,7 @@ mod tests {
     }
 
     #[test]
-    fn dcr_zero(){
+    fn dcr_zero() {
         let mut cpu = Intel8080::default();
         let ins = 0b00010101;
         cpu.set_register(Register::D, 1);
@@ -343,25 +350,25 @@ mod tests {
     }
 
     #[test]
-    fn dcr_aux_carry(){
+    fn dcr_aux_carry() {
         let mut cpu = Intel8080::default();
-        let ins =  0b00011101;
+        let ins = 0b00011101;
         cpu.set_register(Register::E, 0b00100000);
         dcr_ddd(ins, &mut cpu);
         assert_eq!(cpu.get_flags(), 0b00010010);
     }
-    
+
     #[test]
-    fn dcr_parity(){
+    fn dcr_parity() {
         let mut cpu = Intel8080::default();
         let ins = 0b00100101;
         cpu.set_register(Register::H, 0b00110111);
         dcr_ddd(ins, &mut cpu);
         assert_eq!(cpu.get_flags(), 0b00000110);
     }
-    
+
     #[test]
-    fn dcr_sign(){
+    fn dcr_sign() {
         let mut cpu = Intel8080::default();
         let ins = 0b00011101;
         dcr_ddd(ins, &mut cpu);
@@ -369,7 +376,7 @@ mod tests {
     }
 
     #[test]
-    fn mvi(){
+    fn mvi() {
         let mut cpu = Intel8080::default();
         let ins = 0b00000110;
         cpu.memory[(cpu.program_counter + 1) as usize] = 69;
@@ -378,7 +385,7 @@ mod tests {
     }
 
     #[test]
-    fn dad(){
+    fn dad() {
         let mut cpu = Intel8080::default();
         let instruction = 0b00001001;
         cpu.set_register_pair(RegisterPair::BC, 0x339F);
@@ -390,7 +397,7 @@ mod tests {
     }
 
     #[test]
-    fn dad_of(){
+    fn dad_of() {
         let mut cpu = Intel8080::default();
         let instruction = 0b00011001;
         cpu.set_register_pair(RegisterPair::HL, 0xFFFF);
@@ -401,7 +408,7 @@ mod tests {
     }
 
     #[test]
-    fn dad_hl(){
+    fn dad_hl() {
         let mut cpu = Intel8080::default();
         let instruction = 0b00101001;
         cpu.set_register_pair(RegisterPair::HL, 0xFF);
@@ -412,7 +419,7 @@ mod tests {
     }
 
     #[test]
-    fn dad_hl_of(){
+    fn dad_hl_of() {
         let mut cpu = Intel8080::default();
         let instruction = 0b00101001;
         cpu.set_register_pair(RegisterPair::HL, 0xF1AB);
@@ -421,9 +428,9 @@ mod tests {
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), res);
         assert_eq!(cpu.get_flag(StatusFlags::C), true)
     }
-    
+
     #[test]
-    fn ldax(){
+    fn ldax() {
         let mut cpu = Intel8080::default();
         let instruction = 0b00001010;
         cpu.set_register_pair(RegisterPair::BC, 0xA1);
@@ -431,10 +438,10 @@ mod tests {
         ldax_rp(instruction, &mut cpu);
         assert_eq!(0xFF, cpu.get_register(&Register::A))
     }
-    
+
     #[test]
     #[should_panic]
-    fn ldax_hl(){
+    fn ldax_hl() {
         let mut cpu = Intel8080::default();
         let instruction = 0b00101010;
         ldax_rp(instruction, &mut cpu)
