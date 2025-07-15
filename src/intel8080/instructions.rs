@@ -51,39 +51,28 @@ fn lxi_rp_data(instruction: u8, intel8080: &mut Intel8080) {
     let (data_low, data_high) = (mem[pc + 1], mem[pc + 2]);
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
     let data = combine_into_u16(data_low, data_high);
-    
-    match rp {
-        0 => intel8080.set_register_pair(RegisterPair::BC, data),
-        1 => intel8080.set_register_pair(RegisterPair::DE, data),
-        2 => intel8080.set_register_pair(RegisterPair::HL, data),
-        3 => intel8080.set_register_pair(RegisterPair::SP, data),
-        _ => panic!("Invalid RP value: {rp}"),
-    }
+    let rp = RegisterPair::get_rp(rp);
+    intel8080.set_register_pair(rp, data);
 }
 // Manual page 17, PDF's 23
 // Stores register A's value at memory[RP], where RP is BC or DE
 fn stax_rp(instruction: u8, intel8080: &mut Intel8080) {
     let reg_a = intel8080.get_register(&Register::A);
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
-    let index = match rp {
-        0 => intel8080.get_register_pair(&RegisterPair::BC) as usize,
-        1 => intel8080.get_register_pair(&RegisterPair::DE) as usize,
-        _ => panic!("Stack can only target BC (0) or DE (1), target: {rp}"),
-    };
-
+    
+    if rp > 1 {
+        panic!("Invalid RP value for instruction stax {rp}")
+    }
+    
+    let rp = RegisterPair::get_rp(rp);
+    let index = intel8080.get_register_pair(&rp) as usize;
     intel8080.memory[index] = reg_a;
 }
 // Manal page 24, PDF's 30
 // Increases RP by 1. Overflow allowed
 fn inx_rp(instruction: u8, intel8080: &mut Intel8080) {
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
-    let rp = match rp {
-        0 => RegisterPair::BC,
-        1 => RegisterPair::DE,
-        2 => RegisterPair::HL,
-        3 => RegisterPair::SP,
-        _ => panic!("Invalid RP value {rp}"),
-    };
+    let rp = RegisterPair::get_rp(rp);
     let rp_value = intel8080.get_register_pair(&rp);
     intel8080.set_register_pair(rp, (Wrapping(rp_value) + Wrapping(1)).0);
 }
