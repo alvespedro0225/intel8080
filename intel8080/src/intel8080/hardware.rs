@@ -1,3 +1,4 @@
+use crate::intel8080::instructions;
 const MEMORY_SIZE: usize = 2usize.pow(16);
 const REGISTER_NUMBER: usize = 7;
 
@@ -217,6 +218,11 @@ impl Intel8080 {
         self.set_status_add(register, !sub + 1);
         // flips AC flag
         self.flags ^= 0b00010000;
+    }
+    
+    pub fn execute_next_instruction(&mut self){
+        let instruction = self.memory[self.program_counter as usize];
+        instructions::handle_instruction(instruction, self)
     }
 }
 

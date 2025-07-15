@@ -1,6 +1,4 @@
 use crate::intel8080::hardware::{Intel8080, Register, RegisterPair, StatusFlags};
-use std::num::Wrapping;
-use crate::intel8080::instructions;
 
 // https://en.wikipedia.org/wiki/Intel_8080#Instruction_set Instruction reference
 // https://altairclone.com/downloads/manuals/8080%20Programmers%20Manual.pdf 8080 manual

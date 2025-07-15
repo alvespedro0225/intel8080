@@ -4,3 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+intel8080 = { version = "0.1.0", path = "../intel8080" }
