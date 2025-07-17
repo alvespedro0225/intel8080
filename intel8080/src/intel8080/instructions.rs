@@ -91,6 +91,10 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0x3A => {
             lda(intel8080);
         }
+        // 0b00111111
+        _ if instruction == 0x3F => {
+            cmc(intel8080);
+        } 
         _ => {}
     }
     intel8080.program_counter += 1;
@@ -303,6 +307,12 @@ fn lda(intel8080: &mut Intel8080) {
     let index = combine_next_instructions(intel8080) as usize;
     let value = intel8080.memory[index];
     intel8080.set_register(Register::A, value);
+}
+// Manual page 14, PDF's 20
+// Complement Carry
+fn cmc(intel8080: &mut Intel8080){
+    let carry = intel8080.get_flag(StatusFlags::C);
+    intel8080.set_flag(StatusFlags::C, !carry);
 }
 fn combine_next_instructions(intel8080: &mut Intel8080) -> u16 {
     let pc = intel8080.program_counter as usize;
@@ -750,5 +760,20 @@ mod tests {
         cpu.memory[0x300] = 0xBC;
         lda(&mut cpu);
         assert_eq!(0xBC, cpu.get_register(&Register::A));
+    }
+    
+    #[test]
+    fn cmc_unset(){
+        let mut cpu = Intel8080::default();
+        cmc(&mut cpu);
+        assert_eq!(true, cpu.get_flag(StatusFlags::C));
+    }
+    
+    #[test]
+    fn cmc_set(){
+        let mut cpu = Intel8080::default();
+        cpu.set_flag(StatusFlags::C, true);
+        cmc(&mut cpu);
+        assert_eq!(false, cpu.get_flag(StatusFlags::C));
     }
 }
