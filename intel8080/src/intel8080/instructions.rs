@@ -64,6 +64,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             lhld(intel8080);
             intel8080.program_counter += 2;
         }
+        _ if instruction == 0x2F => {
+            cma(intel8080);
+        }
         _ => {}
     }
     intel8080.program_counter += 1;
@@ -225,7 +228,7 @@ fn shld(intel8080: &mut Intel8080) {
 }
 // Manual page 15, PDF's 21
 // Decimal Adjust Accumulator
-fn daa(intel8080: &mut Intel8080){
+fn daa(intel8080: &mut Intel8080) {
     let mut accumulator = intel8080.get_register(&Register::A);
     let right = accumulator & 0xF;
 
@@ -253,12 +256,18 @@ fn daa(intel8080: &mut Intel8080){
 }
 // Manual page 31, PDF's 37
 // Load H And L Direct
-fn lhld(intel8080: &mut Intel8080){
+fn lhld(intel8080: &mut Intel8080) {
     let pc = intel8080.program_counter as usize;
     let (second, third) = (intel8080.memory[pc + 1], intel8080.memory[pc + 2]);
     let index = combine_into_u16(second, third) as usize;
     intel8080.set_register(Register::L, intel8080.memory[index]);
     intel8080.set_register(Register::H, intel8080.memory[index + 1]);
+}
+// Manual page 15, PDF's 21
+// Complement Accumulator
+fn cma(intel8080: &mut Intel8080){
+    let accumulator = intel8080.get_register(&Register::A);
+    intel8080.set_register(Register::A, !accumulator);
 }
 /// Combines two 8 bits memory addresses into one 16 bits address. The third bit is the msb.
 fn combine_into_u16(second: u8, third: u8) -> u16 {
@@ -642,16 +651,16 @@ mod tests {
     }
 
     #[test]
-    fn daa_t(){
+    fn daa_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0x9B);
         daa(&mut cpu);
         assert_eq!(cpu.get_flags(), 0b00010011);
         assert_eq!(cpu.get_register(&Register::A), 1)
     }
-    
+
     #[test]
-    fn daa_parity(){
+    fn daa_parity() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0x9D);
         daa(&mut cpu);
@@ -660,7 +669,7 @@ mod tests {
     }
 
     #[test]
-    fn lhld_t(){
+    fn lhld_t() {
         let mut cpu = Intel8080::default();
         cpu.memory[1] = 0x5B;
         cpu.memory[2] = 0x02;
@@ -669,5 +678,13 @@ mod tests {
         lhld(&mut cpu);
         assert_eq!(cpu.get_register(&Register::L), 0xFF);
         assert_eq!(cpu.get_register(&Register::H), 0x03);
+    }
+
+    #[test]
+    fn cma_t(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 0x51);
+        cma(&mut cpu);
+        assert_eq!(0xAE, cpu.get_register(&Register::A));
     }
 }
