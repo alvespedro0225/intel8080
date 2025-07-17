@@ -1,4 +1,5 @@
 use crate::intel8080::hardware::{Intel8080, Register, RegisterPair, StatusFlags};
+use crate::intel8080::instructions;
 
 // https://en.wikipedia.org/wiki/Intel_8080#Instruction_set Instruction reference
 // https://altairclone.com/downloads/manuals/8080%20Programmers%20Manual.pdf 8080 manual
@@ -94,7 +95,11 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         // 0b00111111
         _ if instruction == 0x3F => {
             cmc(intel8080);
-        } 
+        }
+        // 0b01DDDSSS
+        _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0x40 => {
+            mov_sss_ddd(instruction, intel8080);
+        }
         _ => {}
     }
     intel8080.program_counter += 1;
@@ -310,10 +315,21 @@ fn lda(intel8080: &mut Intel8080) {
 }
 // Manual page 14, PDF's 20
 // Complement Carry
-fn cmc(intel8080: &mut Intel8080){
+fn cmc(intel8080: &mut Intel8080) {
     let carry = intel8080.get_flag(StatusFlags::C);
     intel8080.set_flag(StatusFlags::C, !carry);
 }
+// Manual page 14, PDF's 20
+// Complement Carry
+fn mov_sss_ddd(instruction: u8, intel8080: &mut Intel8080) {
+    let src = InstructionVars::get(instruction, InstructionVars::SSS);
+    let dest = InstructionVars::get(instruction, InstructionVars::DDD);
+    let src = Register::get_ddd(src);
+    let dest = Register::get_ddd(dest);
+    let src = intel8080.get_register(&src);
+    intel8080.set_register(dest, src);
+}
+/// Combines the next two instructions into one 16 bits number. The third byte is the msb.
 fn combine_next_instructions(intel8080: &mut Intel8080) -> u16 {
     let pc = intel8080.program_counter as usize;
     let (second, third) = (intel8080.memory[pc + 1], intel8080.memory[pc + 2]);
@@ -323,7 +339,7 @@ fn combine_next_instructions(intel8080: &mut Intel8080) -> u16 {
     value ^= second;
     value
 }
-/// Combines two 8 bits memory addresses into one 16 bits address. The third bit is the msb.
+
 enum InstructionVars {
     RP,
     CC,
@@ -338,7 +354,7 @@ impl InstructionVars {
         let neg = match var {
             InstructionVars::RP | InstructionVars::CC => !(0b11 << 4),
             InstructionVars::DDD | InstructionVars::ALU | InstructionVars::N => !(0b111 << 3),
-            InstructionVars::SSS => !0b111,
+            InstructionVars::SSS => !0b111111,
         };
         instruction & neg
     }
@@ -761,19 +777,30 @@ mod tests {
         lda(&mut cpu);
         assert_eq!(0xBC, cpu.get_register(&Register::A));
     }
-    
+
     #[test]
-    fn cmc_unset(){
+    fn cmc_unset() {
         let mut cpu = Intel8080::default();
         cmc(&mut cpu);
         assert_eq!(true, cpu.get_flag(StatusFlags::C));
     }
-    
+
     #[test]
-    fn cmc_set(){
+    fn cmc_set() {
         let mut cpu = Intel8080::default();
         cpu.set_flag(StatusFlags::C, true);
         cmc(&mut cpu);
         assert_eq!(false, cpu.get_flag(StatusFlags::C));
+    }
+    
+    #[test]
+    fn mov(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0x77;
+        cpu.set_register(Register::A, 0x11);
+        cpu.set_register(Register::H, 0x2B);
+        cpu.set_register(Register::L, 0xE9);
+        mov_sss_ddd(instruction, &mut cpu);
+        assert_eq!(cpu.get_register(&Register::A), cpu.get_register(&Register::M));
     }
 }
