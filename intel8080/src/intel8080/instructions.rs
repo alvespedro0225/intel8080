@@ -55,9 +55,14 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         }
         _ if instruction == 0x22 => {
             shld(intel8080);
+            intel8080.program_counter += 2;
         }
         _ if instruction == 0x27 => {
             daa(intel8080);
+        }
+        _ if instruction == 0x2A => {
+            lhld(intel8080);
+            intel8080.program_counter += 2;
         }
         _ => {}
     }
@@ -218,7 +223,8 @@ fn shld(intel8080: &mut Intel8080) {
     intel8080.memory[address] = intel8080.get_register(&Register::L);
     intel8080.memory[address + 1] = intel8080.get_register(&Register::H);
 }
-
+// Manual page 15, PDF's 21
+// Decimal Adjust Accumulator
 fn daa(intel8080: &mut Intel8080){
     let mut accumulator = intel8080.get_register(&Register::A);
     let right = accumulator & 0xF;
@@ -245,7 +251,16 @@ fn daa(intel8080: &mut Intel8080){
     intel8080.set_parity(accumulator);
     intel8080.set_zero_or_less(accumulator);
 }
-
+// Manual page 31, PDF's 37
+// Load H And L Direct
+fn lhld(intel8080: &mut Intel8080){
+    let pc = intel8080.program_counter as usize;
+    let (second, third) = (intel8080.memory[pc + 1], intel8080.memory[pc + 2]);
+    let index = combine_into_u16(second, third) as usize;
+    intel8080.set_register(Register::L, intel8080.memory[index]);
+    intel8080.set_register(Register::H, intel8080.memory[index + 1]);
+}
+/// Combines two 8 bits memory addresses into one 16 bits address. The third bit is the msb.
 fn combine_into_u16(second: u8, third: u8) -> u16 {
     let second = second as u16;
     let third = third as u16;
@@ -642,5 +657,17 @@ mod tests {
         daa(&mut cpu);
         assert_eq!(cpu.get_flags(), 0b00010111);
         assert_eq!(cpu.get_register(&Register::A), 3);
+    }
+
+    #[test]
+    fn lhld_t(){
+        let mut cpu = Intel8080::default();
+        cpu.memory[1] = 0x5B;
+        cpu.memory[2] = 0x02;
+        cpu.memory[0x25B] = 0xFF;
+        cpu.memory[0x25C] = 0x03;
+        lhld(&mut cpu);
+        assert_eq!(cpu.get_register(&Register::L), 0xFF);
+        assert_eq!(cpu.get_register(&Register::H), 0x03);
     }
 }
