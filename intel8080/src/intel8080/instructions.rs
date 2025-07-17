@@ -83,6 +83,10 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             sta(intel8080);
             intel8080.program_counter += 2;
         }
+        // 0b00110111
+        _ if instruction == 0x37 => {
+            stc(intel8080);
+        }
         _ => {}
     }
     intel8080.program_counter += 1;
@@ -292,6 +296,11 @@ fn sta(intel8080: &mut Intel8080){
     let (second, third) = (intel8080.memory[pc + 1], intel8080.memory[pc + 2]);
     let index = combine_into_u16(second, third) as usize;
     intel8080.memory[index] = intel8080.get_register(&Register::A);
+}
+// Manual page 14, PDF's 20
+// Set Carry
+fn stc(intel8080: &mut Intel8080){
+    intel8080.set_flag(StatusFlags::C, true);
 }
 /// Combines two 8 bits memory addresses into one 16 bits address. The third bit is the msb.
 fn combine_into_u16(second: u8, third: u8) -> u16 {
@@ -711,7 +720,7 @@ mod tests {
         cma(&mut cpu);
         assert_eq!(0xAE, cpu.get_register(&Register::A));
     }
-    
+
     #[test]
     fn sta_t(){
         let mut cpu = Intel8080::default();
@@ -720,5 +729,12 @@ mod tests {
         cpu.memory[2] = 0x05;
         sta(&mut cpu);
         assert_eq!(0xA1, cpu.memory[0x5B3]);
+    }
+    
+    #[test]
+    fn stc_t(){
+        let mut cpu = Intel8080::default();
+        stc(&mut cpu);
+        assert_eq!(true, cpu.get_flag(StatusFlags::C));
     }
 }
