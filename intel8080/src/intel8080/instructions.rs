@@ -87,6 +87,10 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0x37 => {
             stc(intel8080);
         }
+        // 0b00111010
+        _ if instruction == 0x3A => {
+            lda(intel8080);
+        }
         _ => {}
     }
     intel8080.program_counter += 1;
@@ -95,10 +99,7 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
 // Manual page 25, PDF's 31
 // Uses the next 2 instruction bytes as data and sets RP to it.
 fn lxi_rp_data(instruction: u8, intel8080: &mut Intel8080) {
-    let mem = intel8080.memory;
-    let pc = intel8080.program_counter as usize;
-    let (second, third) = (mem[pc + 1], mem[pc + 2]);
-    let rp_value = combine_into_u16(second, third);
+    let rp_value = combine_next_instructions(intel8080) as u16;
     let rp = InstructionVars::get(instruction, InstructionVars::RP);
     let rp = RegisterPair::get_rp(rp);
     intel8080.set_register_pair(rp, rp_value);
@@ -240,11 +241,9 @@ fn rar(intel8080: &mut Intel8080) {
 // Manual page 30, PDF's 36
 // Store H and L Directly
 fn shld(intel8080: &mut Intel8080) {
-    let pc = intel8080.program_counter as usize;
-    let (second, third) = (intel8080.memory[pc + 1], intel8080.memory[pc + 2]);
-    let address = combine_into_u16(second, third) as usize;
-    intel8080.memory[address] = intel8080.get_register(&Register::L);
-    intel8080.memory[address + 1] = intel8080.get_register(&Register::H);
+    let index = combine_next_instructions(intel8080) as usize;
+    intel8080.memory[index] = intel8080.get_register(&Register::L);
+    intel8080.memory[index + 1] = intel8080.get_register(&Register::H);
 }
 // Manual page 15, PDF's 21
 // Decimal Adjust Accumulator
@@ -277,39 +276,44 @@ fn daa(intel8080: &mut Intel8080) {
 // Manual page 31, PDF's 37
 // Load H And L Direct
 fn lhld(intel8080: &mut Intel8080) {
-    let pc = intel8080.program_counter as usize;
-    let (second, third) = (intel8080.memory[pc + 1], intel8080.memory[pc + 2]);
-    let index = combine_into_u16(second, third) as usize;
+    let index = combine_next_instructions(intel8080) as usize;
     intel8080.set_register(Register::L, intel8080.memory[index]);
     intel8080.set_register(Register::H, intel8080.memory[index + 1]);
 }
 // Manual page 15, PDF's 21
 // Complement Accumulator
-fn cma(intel8080: &mut Intel8080){
+fn cma(intel8080: &mut Intel8080) {
     let accumulator = intel8080.get_register(&Register::A);
     intel8080.set_register(Register::A, !accumulator);
 }
 // Manual page 30, PDF's 36
 // Store Accumulator Direct
-fn sta(intel8080: &mut Intel8080){
-    let pc = intel8080.program_counter as usize;
-    let (second, third) = (intel8080.memory[pc + 1], intel8080.memory[pc + 2]);
-    let index = combine_into_u16(second, third) as usize;
+fn sta(intel8080: &mut Intel8080) {
+    let index = combine_next_instructions(intel8080) as usize;
     intel8080.memory[index] = intel8080.get_register(&Register::A);
 }
 // Manual page 14, PDF's 20
 // Set Carry
-fn stc(intel8080: &mut Intel8080){
+fn stc(intel8080: &mut Intel8080) {
     intel8080.set_flag(StatusFlags::C, true);
 }
-/// Combines two 8 bits memory addresses into one 16 bits address. The third bit is the msb.
-fn combine_into_u16(second: u8, third: u8) -> u16 {
+// Manual page 30, PDF's 36
+// Load Accumulator Direct
+fn lda(intel8080: &mut Intel8080) {
+    let index = combine_next_instructions(intel8080) as usize;
+    let value = intel8080.memory[index];
+    intel8080.set_register(Register::A, value);
+}
+fn combine_next_instructions(intel8080: &mut Intel8080) -> u16 {
+    let pc = intel8080.program_counter as usize;
+    let (second, third) = (intel8080.memory[pc + 1], intel8080.memory[pc + 2]);
     let second = second as u16;
     let third = third as u16;
     let mut value = third << 8;
     value ^= second;
     value
 }
+/// Combines two 8 bits memory addresses into one 16 bits address. The third bit is the msb.
 enum InstructionVars {
     RP,
     CC,
@@ -372,12 +376,12 @@ mod tests {
         assert_eq!(subset, 7)
     }
 
-    #[test]
-    fn combine() {
-        let second = 0xFF;
-        let third = 0x1A;
-        assert_eq!(combine_into_u16(second, third), 0x1AFF)
-    }
+    // #[test]
+    // fn combine() {
+    //     let second = 0xFF;
+    //     let third = 0x1A;
+    //     assert_eq!(combine_into_u16(second, third), 0x1AFF)
+    // }
 
     #[test]
     fn lxi() {
@@ -714,7 +718,7 @@ mod tests {
     }
 
     #[test]
-    fn cma_t(){
+    fn cma_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0x51);
         cma(&mut cpu);
@@ -722,7 +726,7 @@ mod tests {
     }
 
     #[test]
-    fn sta_t(){
+    fn sta_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0xA1);
         cpu.memory[1] = 0xB3;
@@ -730,11 +734,21 @@ mod tests {
         sta(&mut cpu);
         assert_eq!(0xA1, cpu.memory[0x5B3]);
     }
-    
+
     #[test]
-    fn stc_t(){
+    fn stc_t() {
         let mut cpu = Intel8080::default();
         stc(&mut cpu);
         assert_eq!(true, cpu.get_flag(StatusFlags::C));
+    }
+
+    #[test]
+    fn lda_t() {
+        let mut cpu = Intel8080::default();
+        cpu.memory[1] = 0x00;
+        cpu.memory[2] = 0x03;
+        cpu.memory[0x300] = 0xBC;
+        lda(&mut cpu);
+        assert_eq!(0xBC, cpu.get_register(&Register::A));
     }
 }
