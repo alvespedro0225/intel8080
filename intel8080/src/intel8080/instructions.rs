@@ -1,5 +1,4 @@
 use crate::intel8080::hardware::{Intel8080, Register, RegisterPair, StatusFlags};
-use crate::intel8080::instructions;
 
 // https://en.wikipedia.org/wiki/Intel_8080#Instruction_set Instruction reference
 // https://altairclone.com/downloads/manuals/8080%20Programmers%20Manual.pdf 8080 manual
@@ -97,11 +96,16 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             cmc(intel8080);
         }
         // 0b01DDDSSS
-        _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0x40 => {
+        _ if InstructionVars::negate(instruction, InstructionVars::MOV) == 0x40 => {
             mov_sss_ddd(instruction, intel8080);
         }
+        // 0b01110110
         _ if instruction == 0x76 => {
             hlt(intel8080);
+        }
+        // 0b10001SSS
+        _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0x80 => {
+            add_sss(instruction, intel8080);
         }
         _ => {}
     }
@@ -142,27 +146,25 @@ fn inx_rp(instruction: u8, intel8080: &mut Intel8080) {
 // Increment register or memory. DDD += 1
 fn inr_ddd(instruction: u8, intel8080: &mut Intel8080) {
     let ddd = InstructionVars::get(instruction, InstructionVars::DDD);
-    let register = Register::get_ddd(ddd);
+    let register = Register::from(ddd);
     let register_value = intel8080.get_register(&register);
-    let (new_value, _) = u8::overflowing_add(register_value, 1);
-    intel8080.set_register(register, new_value);
-    intel8080.set_status_add(register_value, 1);
+    let result = intel8080.set_status_add(register_value, 1, false);
+    intel8080.set_register(register, result);
 }
 // Manual page 15, PDF's 21
 // Decrement register or memory. DDD -= 1
 fn dcr_ddd(instruction: u8, intel8080: &mut Intel8080) {
     let ddd = InstructionVars::get(instruction, InstructionVars::DDD);
-    let register = Register::get_ddd(ddd);
+    let register = Register::from(ddd);
     let register_value = intel8080.get_register(&register);
-    let (new_value, _) = u8::overflowing_sub(register_value, 1);
-    intel8080.set_register(register, new_value);
-    intel8080.set_status_sub(register_value, 1);
+    let result = intel8080.set_status_sub(register_value, 1, false);
+    intel8080.set_register(register, result);
 }
 // Manual page 26, PDF's 32
 // Move immediate data. DDD = Data
 fn mvi_ddd_data(instruction: u8, intel8080: &mut Intel8080) {
     let ddd = InstructionVars::get(instruction, InstructionVars::DDD);
-    let ddd = Register::get_ddd(ddd);
+    let ddd = Register::from(ddd);
     let data = intel8080.memory[(intel8080.program_counter + 1) as usize];
     intel8080.set_register(ddd, data);
 }
@@ -322,20 +324,29 @@ fn cmc(intel8080: &mut Intel8080) {
     let carry = intel8080.get_flag(StatusFlags::C);
     intel8080.set_flag(StatusFlags::C, !carry);
 }
-// Manual page 14, PDF's 20
-// Complement Carry
+// Manual page 16, PDF's 22
+//  MOV Instruction
 fn mov_sss_ddd(instruction: u8, intel8080: &mut Intel8080) {
     let src = InstructionVars::get(instruction, InstructionVars::SSS);
     let dest = InstructionVars::get(instruction, InstructionVars::DDD);
-    let src = Register::get_ddd(src);
-    let dest = Register::get_ddd(dest);
+    let src = Register::from(src);
+    let dest = Register::from(dest);
     let src = intel8080.get_register(&src);
     intel8080.set_register(dest, src);
 }
-// Manual page 14, PDF's 20
-// Complement Carry
-fn hlt(intel8080: &mut Intel8080){
+// Manual page 39, PDF's 45
+// Halt
+fn hlt(intel8080: &mut Intel8080) {
     intel8080.stopped = true;
+}
+// Manual page 17, PDF's 23
+// ADD Register or Memory To Accumulator
+fn add_sss(instruction: u8, intel8080: &mut Intel8080) {
+    let added = InstructionVars::get(instruction, InstructionVars::SSS);
+    let added = Register::from(added);
+    let added = intel8080.get_register(&added);
+    let result = intel8080.set_status_add(intel8080.get_register(&Register::A), added, true);
+    intel8080.set_register(Register::A, result);
 }
 /// Combines the next two instructions into one 16 bits number. The third byte is the msb.
 fn combine_next_instructions(intel8080: &mut Intel8080) -> u16 {
@@ -352,7 +363,7 @@ enum InstructionVars {
     RP,
     CC,
     DDD,
-    ALU,
+    MOV,
     N,
     SSS,
 }
@@ -361,8 +372,9 @@ impl InstructionVars {
     fn negate(instruction: u8, var: InstructionVars) -> u8 {
         let neg = match var {
             InstructionVars::RP | InstructionVars::CC => !(0b11 << 4),
-            InstructionVars::DDD | InstructionVars::ALU | InstructionVars::N => !(0b111 << 3),
-            InstructionVars::SSS => !0b111111,
+            InstructionVars::DDD | InstructionVars::N => !(0b111 << 3),
+            InstructionVars::SSS => !0b111,
+            InstructionVars::MOV => !0b111111,
         };
         instruction & neg
     }
@@ -374,7 +386,7 @@ impl InstructionVars {
                 shift = 4;
                 0b11 << shift
             }
-            InstructionVars::DDD | InstructionVars::ALU | InstructionVars::N => {
+            InstructionVars::DDD | InstructionVars::N => {
                 shift = 3;
                 0b111 << shift
             }
@@ -382,6 +394,7 @@ impl InstructionVars {
                 shift = 0;
                 0b111
             }
+            InstructionVars::MOV => panic!("Invalid operation. Tried to get MOV"),
         };
         let instruction = neg & instruction;
         instruction >> shift
@@ -802,13 +815,40 @@ mod tests {
     }
 
     #[test]
-    fn mov(){
+    fn mov() {
         let mut cpu = Intel8080::default();
         let instruction = 0x77;
         cpu.set_register(Register::A, 0x11);
         cpu.set_register(Register::H, 0x2B);
         cpu.set_register(Register::L, 0xE9);
         mov_sss_ddd(instruction, &mut cpu);
-        assert_eq!(cpu.get_register(&Register::A), cpu.get_register(&Register::M));
+        assert_eq!(
+            cpu.get_register(&Register::A),
+            cpu.get_register(&Register::M)
+        );
+    }
+
+    #[test]
+    fn add(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0x82;
+        cpu.set_register(Register::D, 0x2E);
+        cpu.set_register(Register::A, 0x6C);
+        add_sss(instruction, &mut cpu);
+        assert_eq!(0x9A, cpu.get_register(&Register::A));
+        assert_eq!(0b10010110, cpu.get_flags())
+    }
+
+    #[test]
+    fn add_of(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0x86;
+        cpu.set_register(Register::H, 0x10);
+        cpu.set_register(Register::L, 0xAB);
+        cpu.set_register(Register::M, 0x10);
+        cpu.set_register(Register::A, 0xF0);
+        add_sss(instruction, &mut cpu);
+        assert_eq!(0, cpu.get_register(&Register::A));
+        assert_eq!(0b01000111, cpu.get_flags())
     }
 }
