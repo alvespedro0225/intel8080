@@ -100,6 +100,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0x40 => {
             mov_sss_ddd(instruction, intel8080);
         }
+        _ if instruction == 0x76 => {
+            hlt(intel8080);
+        }
         _ => {}
     }
     intel8080.program_counter += 1;
@@ -328,6 +331,11 @@ fn mov_sss_ddd(instruction: u8, intel8080: &mut Intel8080) {
     let dest = Register::get_ddd(dest);
     let src = intel8080.get_register(&src);
     intel8080.set_register(dest, src);
+}
+// Manual page 14, PDF's 20
+// Complement Carry
+fn hlt(intel8080: &mut Intel8080){
+    intel8080.stopped = true;
 }
 /// Combines the next two instructions into one 16 bits number. The third byte is the msb.
 fn combine_next_instructions(intel8080: &mut Intel8080) -> u16 {
@@ -792,7 +800,7 @@ mod tests {
         cmc(&mut cpu);
         assert_eq!(false, cpu.get_flag(StatusFlags::C));
     }
-    
+
     #[test]
     fn mov(){
         let mut cpu = Intel8080::default();
