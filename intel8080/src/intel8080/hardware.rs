@@ -221,8 +221,9 @@ impl Intel8080 {
 
     pub fn set_status_sub(&mut self, register: u8, sub: u8, set_carry: bool) -> u8 {
         let result = self.set_status_add(register, !sub + 1, set_carry);
-        // flips AC flag
-        self.flags ^= 0b00010000;
+        if set_carry {
+            self.flags ^= 1;
+        }
         result
     }
 
