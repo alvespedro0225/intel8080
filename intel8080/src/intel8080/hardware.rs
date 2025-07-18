@@ -406,7 +406,7 @@ pub mod tests {
     #[test]
     fn set_status_addition_zero() {
         let mut cpu = Intel8080::default();
-        cpu.set_status_add(255, 1, false);
+        cpu.set_status_add(255, 1, true);
         assert_eq!(cpu.flags, 0b01010111);
     }
 }

@@ -96,7 +96,7 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             cmc(intel8080);
         }
         // 0b01DDDSSS
-        _ if InstructionVars::negate(instruction, InstructionVars::MOV) == 0x40 => {
+        _ if (instruction & !0b111111u8) == 0x40 => {
             mov_sss_ddd(instruction, intel8080);
         }
         // 0b01110110
@@ -107,6 +107,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0x80 => {
             add_sss(instruction, intel8080);
         }
+        _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0x88 => {
+            adc_sss(instruction, intel8080);
+        }
         _ => {}
     }
     intel8080.program_counter += 1;
@@ -116,7 +119,7 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
 // Uses the next 2 instruction bytes as data and sets RP to it.
 fn lxi_rp_data(instruction: u8, intel8080: &mut Intel8080) {
     let rp_value = combine_next_instructions(intel8080) as u16;
-    let rp = InstructionVars::get(instruction, InstructionVars::RP);
+    let rp = InstructionVars::get_subset(instruction, InstructionVars::RP);
     let rp = RegisterPair::get_rp(rp);
     intel8080.set_register_pair(rp, rp_value);
 }
@@ -124,7 +127,7 @@ fn lxi_rp_data(instruction: u8, intel8080: &mut Intel8080) {
 // Store Accumulator. memory[RP] = A
 fn stax_rp(instruction: u8, intel8080: &mut Intel8080) {
     let reg_a = intel8080.get_register(&Register::A);
-    let rp = InstructionVars::get(instruction, InstructionVars::RP);
+    let rp = InstructionVars::get_subset(instruction, InstructionVars::RP);
 
     if rp > 1 {
         panic!("Invalid RP value for instruction stax {rp}")
@@ -137,7 +140,7 @@ fn stax_rp(instruction: u8, intel8080: &mut Intel8080) {
 // Manal page 24, PDF's 30
 // Increases RP by 1. RP += 1
 fn inx_rp(instruction: u8, intel8080: &mut Intel8080) {
-    let rp = InstructionVars::get(instruction, InstructionVars::RP);
+    let rp = InstructionVars::get_subset(instruction, InstructionVars::RP);
     let rp = RegisterPair::get_rp(rp);
     let rp_value = intel8080.get_register_pair(&rp);
     intel8080.set_register_pair(rp, u16::wrapping_add(rp_value, 1));
@@ -145,7 +148,7 @@ fn inx_rp(instruction: u8, intel8080: &mut Intel8080) {
 // Manual page 15, PDF's 21
 // Increment register or memory. DDD += 1
 fn inr_ddd(instruction: u8, intel8080: &mut Intel8080) {
-    let ddd = InstructionVars::get(instruction, InstructionVars::DDD);
+    let ddd = InstructionVars::get_subset(instruction, InstructionVars::DDD);
     let register = Register::from(ddd);
     let register_value = intel8080.get_register(&register);
     let result = intel8080.set_status_add(register_value, 1, false);
@@ -154,7 +157,7 @@ fn inr_ddd(instruction: u8, intel8080: &mut Intel8080) {
 // Manual page 15, PDF's 21
 // Decrement register or memory. DDD -= 1
 fn dcr_ddd(instruction: u8, intel8080: &mut Intel8080) {
-    let ddd = InstructionVars::get(instruction, InstructionVars::DDD);
+    let ddd = InstructionVars::get_subset(instruction, InstructionVars::DDD);
     let register = Register::from(ddd);
     let register_value = intel8080.get_register(&register);
     let result = intel8080.set_status_sub(register_value, 1, false);
@@ -163,7 +166,7 @@ fn dcr_ddd(instruction: u8, intel8080: &mut Intel8080) {
 // Manual page 26, PDF's 32
 // Move immediate data. DDD = Data
 fn mvi_ddd_data(instruction: u8, intel8080: &mut Intel8080) {
-    let ddd = InstructionVars::get(instruction, InstructionVars::DDD);
+    let ddd = InstructionVars::get_subset(instruction, InstructionVars::DDD);
     let ddd = Register::from(ddd);
     let data = intel8080.memory[(intel8080.program_counter + 1) as usize];
     intel8080.set_register(ddd, data);
@@ -172,7 +175,7 @@ fn mvi_ddd_data(instruction: u8, intel8080: &mut Intel8080) {
 // Double add. HL += RP
 fn dad_rp(instruction: u8, intel8080: &mut Intel8080) {
     let hl = intel8080.get_register_pair(&RegisterPair::HL);
-    let rp = InstructionVars::get(instruction, InstructionVars::RP);
+    let rp = InstructionVars::get_subset(instruction, InstructionVars::RP);
     let rp = RegisterPair::get_rp(rp);
 
     let (sum, of) = if let RegisterPair::HL = rp {
@@ -188,7 +191,7 @@ fn dad_rp(instruction: u8, intel8080: &mut Intel8080) {
 // Manual page 17, PDF's 23
 // Load Accumulator. A = memory[RP]
 fn ldax_rp(instruction: u8, intel8080: &mut Intel8080) {
-    let rp = InstructionVars::get(instruction, InstructionVars::RP);
+    let rp = InstructionVars::get_subset(instruction, InstructionVars::RP);
 
     if rp > 1 {
         panic!("Invalid RP value for instruction ldax {rp}")
@@ -201,7 +204,7 @@ fn ldax_rp(instruction: u8, intel8080: &mut Intel8080) {
 // Manual page 24, PDF's 30
 // Decrement Register Pair. RP -= 1
 fn dcx_rp(instruction: u8, intel8080: &mut Intel8080) {
-    let rp = InstructionVars::get(instruction, InstructionVars::RP);
+    let rp = InstructionVars::get_subset(instruction, InstructionVars::RP);
     let rp = RegisterPair::get_rp(rp);
     let rp_value = intel8080.get_register_pair(&rp);
     intel8080.set_register_pair(rp, u16::wrapping_sub(rp_value, 1));
@@ -327,8 +330,8 @@ fn cmc(intel8080: &mut Intel8080) {
 // Manual page 16, PDF's 22
 //  MOV Instruction
 fn mov_sss_ddd(instruction: u8, intel8080: &mut Intel8080) {
-    let src = InstructionVars::get(instruction, InstructionVars::SSS);
-    let dest = InstructionVars::get(instruction, InstructionVars::DDD);
+    let src = InstructionVars::get_subset(instruction, InstructionVars::SSS);
+    let dest = InstructionVars::get_subset(instruction, InstructionVars::DDD);
     let src = Register::from(src);
     let dest = Register::from(dest);
     let src = intel8080.get_register(&src);
@@ -342,10 +345,26 @@ fn hlt(intel8080: &mut Intel8080) {
 // Manual page 17, PDF's 23
 // ADD Register or Memory To Accumulator
 fn add_sss(instruction: u8, intel8080: &mut Intel8080) {
-    let added = InstructionVars::get(instruction, InstructionVars::SSS);
+    let added = InstructionVars::get_subset(instruction, InstructionVars::SSS);
     let added = Register::from(added);
     let added = intel8080.get_register(&added);
-    let result = intel8080.set_status_add(intel8080.get_register(&Register::A), added, true);
+    let accumulator = intel8080.get_register(&Register::A);
+    let result = intel8080.set_status_add(accumulator, added, true);
+    intel8080.set_register(Register::A, result);
+}
+// Manual page 18, PDF's 24
+// ADD Register or Memory To Accumulator With Carry
+fn adc_sss(instruction: u8, intel8080: &mut Intel8080) {
+    let added = InstructionVars::get_subset(instruction, InstructionVars::SSS);
+    let added = Register::from(added);
+    let mut added = intel8080.get_register(&added);
+    let accumulator = intel8080.get_register(&Register::A);
+
+    if intel8080.get_flag(StatusFlags::C) {
+        added += 1;
+    }
+
+    let result = intel8080.set_status_add(accumulator, added, true);
     intel8080.set_register(Register::A, result);
 }
 /// Combines the next two instructions into one 16 bits number. The third byte is the msb.
@@ -363,7 +382,6 @@ enum InstructionVars {
     RP,
     CC,
     DDD,
-    MOV,
     N,
     SSS,
 }
@@ -374,12 +392,11 @@ impl InstructionVars {
             InstructionVars::RP | InstructionVars::CC => !(0b11 << 4),
             InstructionVars::DDD | InstructionVars::N => !(0b111 << 3),
             InstructionVars::SSS => !0b111,
-            InstructionVars::MOV => !0b111111,
         };
         instruction & neg
     }
 
-    fn get(instruction: u8, var: InstructionVars) -> u8 {
+    fn get_subset(instruction: u8, var: InstructionVars) -> u8 {
         let shift;
         let neg = match var {
             InstructionVars::RP | InstructionVars::CC => {
@@ -394,7 +411,6 @@ impl InstructionVars {
                 shift = 0;
                 0b111
             }
-            InstructionVars::MOV => panic!("Invalid operation. Tried to get MOV"),
         };
         let instruction = neg & instruction;
         instruction >> shift
@@ -406,7 +422,7 @@ mod tests {
     #[test]
     fn get_instruction_var() {
         let ins = 0b01101110;
-        let rp = InstructionVars::get(ins, InstructionVars::RP);
+        let rp = InstructionVars::get_subset(ins, InstructionVars::RP);
         assert_eq!(rp, 2);
     }
 
@@ -419,7 +435,7 @@ mod tests {
 
     #[test]
     fn subset() {
-        let subset = InstructionVars::get(0x38, InstructionVars::DDD);
+        let subset = InstructionVars::get_subset(0x38, InstructionVars::DDD);
         assert_eq!(subset, 7)
     }
 
@@ -829,7 +845,7 @@ mod tests {
     }
 
     #[test]
-    fn add(){
+    fn add() {
         let mut cpu = Intel8080::default();
         let instruction = 0x82;
         cpu.set_register(Register::D, 0x2E);
@@ -840,7 +856,7 @@ mod tests {
     }
 
     #[test]
-    fn add_of(){
+    fn add_of() {
         let mut cpu = Intel8080::default();
         let instruction = 0x86;
         cpu.set_register(Register::H, 0x10);
@@ -848,6 +864,43 @@ mod tests {
         cpu.set_register(Register::M, 0x10);
         cpu.set_register(Register::A, 0xF0);
         add_sss(instruction, &mut cpu);
+        assert_eq!(0, cpu.get_register(&Register::A));
+        assert_eq!(0b01000111, cpu.get_flags())
+    }
+
+    #[test]
+    fn adc_unset() {
+        let mut cpu = Intel8080::default();
+        let instruction = 0x89;
+        cpu.set_register(Register::C, 0x3D);
+        cpu.set_register(Register::A, 0x42);
+        adc_sss(instruction, &mut cpu);
+        assert_eq!(cpu.get_register(&Register::A), 0x7F);
+        assert_eq!(cpu.get_flags(), 0b00000010);
+    }
+    
+    #[test]
+    fn adc_set() {
+        let mut cpu = Intel8080::default();
+        let instruction = 0x89;
+        cpu.set_register(Register::C, 0x3D);
+        cpu.set_register(Register::A, 0x42);
+        cpu.set_flag(StatusFlags::C, true);
+        adc_sss(instruction, &mut cpu);
+        assert_eq!(cpu.get_register(&Register::A), 0x80);
+        assert_eq!(cpu.get_flags(), 0b10010010);
+    }
+    
+    #[test]
+    fn adc_of(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0x86;
+        cpu.set_register(Register::H, 0x10);
+        cpu.set_register(Register::L, 0xAB);
+        cpu.set_register(Register::M, 0xF);
+        cpu.set_register(Register::A, 0xF0);
+        cpu.set_flag(StatusFlags::C, true);
+        adc_sss(instruction, &mut cpu);
         assert_eq!(0, cpu.get_register(&Register::A));
         assert_eq!(0b01000111, cpu.get_flags())
     }
