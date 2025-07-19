@@ -1,7 +1,7 @@
 use crate::intel8080::hardware::{Intel8080, Register, RegisterPair, StatusFlags};
 
 // https://en.wikipedia.org/wiki/Intel_8080#Instruction_set Instruction reference
-// https://altairclone.com/downloads/manuals/8080%20Programmers%20Manual.pdf 8080 manual
+// https://bitsavers.org/components/intel/MCS80/9800301D_8080_8085_Assembly_Language_Programming_Manual_May81.pdf 8080 manual
 // https://svofski.github.io/pretty-8080-assembler/ assembler
 pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
     match instruction {
@@ -118,6 +118,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         }
         _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0xA0 => {
             ana_sss(instruction, intel8080);
+        }
+        _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0xA8 => {
+            xra_sss(instruction, intel8080);
         }
         _ => {}
     }
@@ -409,10 +412,17 @@ fn ana_sss(instruction: u8, intel8080: &mut Intel8080) {
     let sss = intel8080.get_register(&sss);
     let accumulator = intel8080.get_register(&Register::A);
     let result = sss & accumulator;
+    let aux_carry = (sss & 0xF) == 0xF || (accumulator & 0xF) == 0xF;
+    intel8080.set_flag(StatusFlags::AC, aux_carry);
     intel8080.set_register(Register::A, result);
     intel8080.set_flag(StatusFlags::C, false);
     intel8080.set_parity(result);
     intel8080.set_zero_or_less(result);
+}
+// Manual page 19, PDF's 25
+// Logical and Register or Memory With Accumulator
+fn xra_sss(instruction: u8, intel8080: &mut Intel8080){
+    
 }
 /// Combines the next two instructions into one 16 bits number. The third byte is the msb.
 fn combine_next_instructions(intel8080: &mut Intel8080) -> u16 {
