@@ -4,6 +4,7 @@ use crate::intel8080::hardware::{Intel8080, Register, RegisterPair, StatusFlags}
 // https://bitsavers.org/components/intel/MCS80/9800301D_8080_8085_Assembly_Language_Programming_Manual_May81.pdf 8080 manual
 // https://svofski.github.io/pretty-8080-assembler/ assembler
 pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
+    intel8080.program_counter += 1;
     match instruction {
         0 => return,
         // 0b00RP0001
@@ -128,9 +129,14 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0xB8 => {
             cmp_sss(instruction, intel8080);
         }
+        _ if instruction == 0xC9 => {
+            ret(intel8080);
+        }
+        _ if instruction == 0xCD => {
+            call(intel8080)
+        }
         _ => {}
     }
-    intel8080.program_counter += 1;
 }
 
 // Manual page 25, PDF's 31
@@ -451,17 +457,41 @@ fn get_sss(instruction: u8, intel8080: &mut Intel8080) -> u8 {
     let sss = Register::from(sss);
     intel8080.get_register(&sss)
 }
+
+fn ret(intel8080: &mut Intel8080){
+    let high = intel8080.stack.pop().expect("Popped from empty stack");
+    let low = intel8080.stack.pop().expect("Popped from empty stack");
+    intel8080.stack_pointer -= 2;
+    intel8080.program_counter = combine_into_u16(low, high);
+}
+
+fn call(intel8080: &mut Intel8080){
+    let (low, high) = split_into_u8(intel8080.program_counter + 2);
+    let address = combine_next_instructions(intel8080);
+    intel8080.stack.push(low);
+    intel8080.stack.push(high);
+    intel8080.program_counter = address;
+}
 /// Combines the next two instructions into one 16 bits number. The third byte is the msb.
 fn combine_next_instructions(intel8080: &mut Intel8080) -> u16 {
     let pc = intel8080.program_counter as usize;
-    let (second, third) = (intel8080.memory[pc + 1], intel8080.memory[pc + 2]);
-    let second = second as u16;
-    let third = third as u16;
-    let mut value = third << 8;
-    value ^= second;
+    let (second, third) = (intel8080.memory[pc], intel8080.memory[pc + 1]);
+    combine_into_u16(second, third)
+}
+
+fn combine_into_u16(low: u8, high: u8) -> u16 {
+    let low = low as u16;
+    let high = high as u16;
+    let mut value = high << 8;
+    value ^= low;
     value
 }
 
+fn split_into_u8(value: u16) -> (u8, u8) {
+    let low = (value & 0xFF) as u8;
+    let high = ((value  >> 8 ) & 0xFF) as u8;
+    (low, high)
+}
 enum InstructionVars {
     RP,
     CC,
@@ -536,8 +566,8 @@ mod tests {
         let mut cpu = Intel8080::default();
         // HL
         let inst: u8 = 0b00100001;
-        cpu.memory[1] = 0xFB;
-        cpu.memory[2] = 0xA3;
+        cpu.memory[0] = 0xFB;
+        cpu.memory[1] = 0xA3;
         lxi_rp_data(inst, &mut cpu);
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0xA3FB);
     }
@@ -828,8 +858,8 @@ mod tests {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::H, 0xAE);
         cpu.set_register(Register::L, 0x29);
-        cpu.memory[1] = 0x0A;
-        cpu.memory[2] = 0x01;
+        cpu.memory[0] = 0x0A;
+        cpu.memory[1] = 0x01;
         shld(&mut cpu);
         assert_eq!(cpu.memory[0x10A], 0x29);
         assert_eq!(cpu.memory[0x10A + 1], 0xAE)
@@ -856,8 +886,8 @@ mod tests {
     #[test]
     fn lhld_t() {
         let mut cpu = Intel8080::default();
-        cpu.memory[1] = 0x5B;
-        cpu.memory[2] = 0x02;
+        cpu.memory[0] = 0x5B;
+        cpu.memory[1] = 0x02;
         cpu.memory[0x25B] = 0xFF;
         cpu.memory[0x25C] = 0x03;
         lhld(&mut cpu);
@@ -877,8 +907,8 @@ mod tests {
     fn sta_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0xA1);
-        cpu.memory[1] = 0xB3;
-        cpu.memory[2] = 0x05;
+        cpu.memory[0] = 0xB3;
+        cpu.memory[1] = 0x05;
         sta(&mut cpu);
         assert_eq!(0xA1, cpu.memory[0x5B3]);
     }
@@ -893,8 +923,8 @@ mod tests {
     #[test]
     fn lda_t() {
         let mut cpu = Intel8080::default();
-        cpu.memory[1] = 0x00;
-        cpu.memory[2] = 0x03;
+        cpu.memory[0] = 0x00;
+        cpu.memory[1] = 0x03;
         cpu.memory[0x300] = 0xBC;
         lda(&mut cpu);
         assert_eq!(0xBC, cpu.get_register(&Register::A));
@@ -1020,7 +1050,7 @@ mod tests {
         cpu.set_register(Register::A, 0xFC);
         ana_sss(instruction, &mut cpu);
         assert_eq!(0xC, cpu.get_register(&Register::A));
-        assert_eq!(0b00000110, cpu.get_flags())
+        assert_eq!(0b00010110, cpu.get_flags())
     }
 
     #[test]
@@ -1056,5 +1086,29 @@ mod tests {
         cpu.set_register(Register::A, 0xA);
         cmp_sss(instruction, &mut cpu);
         assert_eq!(0b00010110, cpu.get_flags())
+    }
+    
+    #[test]
+    fn ret_t(){
+        let mut cpu = Intel8080::default();
+        cpu.stack.push(0xDD);
+        cpu.stack.push(0xAA);
+        cpu.stack_pointer += 2;
+        cpu.program_counter = 0xF1F1;
+        ret(&mut cpu);
+        assert_eq!(cpu.program_counter, 0xAADD);
+    }
+    
+    #[test]
+    fn call_t(){
+        let mut cpu = Intel8080::default();
+        cpu.program_counter = 0xA1B2;
+        let pc = cpu.program_counter as usize;
+        cpu.memory[pc] = 0xCC;
+        cpu.memory[pc + 1] = 0xDD;
+        call(&mut cpu);
+        assert_eq!(cpu.program_counter, 0xDDCC);
+        assert_eq!(cpu.stack[0], 0xB4);
+        assert_eq!(cpu.stack[1], 0xA1);
     }
 }

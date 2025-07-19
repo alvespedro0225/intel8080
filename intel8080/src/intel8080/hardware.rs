@@ -15,6 +15,7 @@ pub struct Intel8080 {
     // 0x4000 =-> ... RAM mirror
     pub memory: [u8; MEMORY_SIZE],
     registers: [u8; REGISTER_NUMBER],
+    pub stack: Vec<u8>,
     pub stack_pointer: u16,
     pub program_counter: u16,
     pub stopped: bool,
@@ -31,6 +32,7 @@ impl Default for Intel8080 {
         Intel8080 {
             memory: [0; MEMORY_SIZE],
             stack_pointer: 0,
+            stack: Vec::with_capacity(20),
             program_counter: 0,
             flags: 2,
             bc: 0,
