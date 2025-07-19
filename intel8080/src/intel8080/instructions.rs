@@ -125,6 +125,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0xB0 => {
             ora_sss(instruction, intel8080);
         }
+        _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0xB8 => {
+            cmp_sss(instruction, intel8080);
+        }
         _ => {}
     }
     intel8080.program_counter += 1;
@@ -438,6 +441,11 @@ fn ora_sss(instruction: u8, intel8080: &mut Intel8080) {
     intel8080.set_register(Register::A, result);
 }
 
+fn cmp_sss(instruction: u8, intel8080: &mut Intel8080) {
+    let sss = get_sss(instruction, intel8080);
+    let accumulator = intel8080.get_register(&Register::A);
+    intel8080.set_status_sub(accumulator, sss, true);
+}
 fn get_sss(instruction: u8, intel8080: &mut Intel8080) -> u8 {
     let sss = InstructionVars::get_subset(instruction, InstructionVars::SSS);
     let sss = Register::from(sss);
@@ -1038,5 +1046,15 @@ mod tests {
         ora_sss(instruction, &mut cpu);
         assert_eq!(0x4B, cpu.get_register(&Register::A));
         assert_eq!(0b00000110, cpu.get_flags());
+    }
+
+    #[test]
+    fn cmp(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0xBB;
+        cpu.set_register(Register::E, 0x5);
+        cpu.set_register(Register::A, 0xA);
+        cmp_sss(instruction, &mut cpu);
+        assert_eq!(0b00010110, cpu.get_flags())
     }
 }
