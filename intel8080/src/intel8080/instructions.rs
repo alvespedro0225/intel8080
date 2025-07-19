@@ -1,4 +1,5 @@
 use crate::intel8080::hardware::{Intel8080, Register, RegisterPair, StatusFlags};
+use crate::intel8080::instructions;
 
 // https://en.wikipedia.org/wiki/Intel_8080#Instruction_set Instruction reference
 // https://altairclone.com/downloads/manuals/8080%20Programmers%20Manual.pdf 8080 manual
@@ -371,12 +372,27 @@ fn adc_sss(instruction: u8, intel8080: &mut Intel8080) {
     intel8080.set_register(Register::A, result);
 }
 // Manual page 18, PDF's 24
-// ADD Register or Memory To Accumulator With Carry
+// SUB Subtract Register or Memory From Accumulator
 fn sub_sss(instruction: u8, intel8080: &mut Intel8080){
     let sub = InstructionVars::get_subset(instruction, InstructionVars::SSS);
     let sub = Register::from(sub);
     let sub = intel8080.get_register(&sub);
     let accumulator = intel8080.get_register(&Register::A);
+    let result = intel8080.set_status_sub(accumulator, sub, true);
+    intel8080.set_register(Register::A, result);
+}
+// Manual page 18, PDF's 24
+// SUB Subtract Register or Memory From Accumulator With Borrow
+fn sbb_sss(instruction: u8, intel8080: &mut Intel8080){
+    let sub = InstructionVars::get_subset(instruction, InstructionVars::SSS);
+    let sub = Register::from(sub);
+    let mut sub = intel8080.get_register(&sub);
+    let accumulator = intel8080.get_register(&Register::A);
+
+    if intel8080.get_flag(StatusFlags::C) {
+        sub += 1;
+    }
+
     let result = intel8080.set_status_sub(accumulator, sub, true);
     intel8080.set_register(Register::A, result);
 }
@@ -927,5 +943,17 @@ mod tests {
         sub_sss(instruction, &mut cpu);
         assert_eq!(0, cpu.get_register(&Register::A));
         assert_eq!(0b01010110, cpu.get_flags());
+    }
+
+    #[test]
+    fn sbb(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0x9D;
+        cpu.set_register(Register::A, 0x4);
+        cpu.set_register(Register::L, 0x2);
+        cpu.set_flag(StatusFlags::C, true);
+        sbb_sss(instruction, &mut cpu);
+        assert_eq!(1, cpu.get_register(&Register::A));
+        assert_eq!(0b00010010, cpu.get_flags())
     }
 }
