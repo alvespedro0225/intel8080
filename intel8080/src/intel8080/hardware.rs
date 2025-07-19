@@ -15,8 +15,7 @@ pub struct Intel8080 {
     // 0x4000 =-> ... RAM mirror
     pub memory: [u8; MEMORY_SIZE],
     registers: [u8; REGISTER_NUMBER],
-    stack: Vec<u8>,
-    pub stack_pointer: u16,
+    stack_pointer: u16,
     pub program_counter: u16,
     pub stopped: bool,
     // S | Z | 0 | AC | 0 | P | 1 |  C
@@ -31,8 +30,7 @@ impl Default for Intel8080 {
     fn default() -> Self {
         Intel8080 {
             memory: [0; MEMORY_SIZE],
-            stack_pointer: 0,
-            stack: Vec::with_capacity(20),
+            stack_pointer: 0x100,
             program_counter: 0,
             flags: 2,
             bc: 0,
@@ -235,18 +233,24 @@ impl Intel8080 {
     }
     
     pub fn pop_address(&mut self) -> u16 {
-        let high = self.stack.pop().expect("Popped from empty stack") as u16;
-        let low = self.stack.pop().expect("Popped from empty stack") as u16;
+        let sp = &mut self.stack_pointer;
+        let low = self.memory[*sp as usize] as u16;
+        *sp += 1;
+        let high = self.memory[*sp as usize] as u16;
+        *sp += 1;
         let mut address = high << 8;
         address |= low;
         address
     }
     
     pub fn push_address(&mut self, address: u16) {
+        let sp = &mut self.stack_pointer;
         let low = (address & 0xFF) as u8;
         let high = ((address  >> 8 ) & 0xFF) as u8;
-        self.stack.push(low);
-        self.stack.push(high);
+        *sp -= 1;
+        self.memory[*sp as usize] = high;
+        *sp -= 1;
+        self.memory[*sp as usize] = low;
     }
 }
 

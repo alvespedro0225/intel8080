@@ -463,7 +463,6 @@ fn get_sss(instruction: u8, intel8080: &mut Intel8080) -> u8 {
 
 fn ret(intel8080: &mut Intel8080) {
     let address = intel8080.pop_address();
-    intel8080.stack_pointer -= 2;
     intel8080.program_counter = address;
 }
 
@@ -489,7 +488,6 @@ fn ret_cond(instruction: u8, intel8080: &mut Intel8080) {
 fn call(intel8080: &mut Intel8080) {
     let address = combine_next_instructions(intel8080);
     intel8080.push_address(address);
-    intel8080.stack_pointer += 2;
     intel8080.program_counter = address;
 }
 
@@ -1107,7 +1105,6 @@ mod tests {
     fn ret_t() {
         let mut cpu = Intel8080::default();
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         ret(&mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
@@ -1117,7 +1114,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xC0;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
@@ -1128,7 +1124,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xC0;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         cpu.set_flag(StatusFlags::Z, true);
         ret_cond(instruction, &mut cpu);
@@ -1140,7 +1135,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xC8;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xF1F1);
@@ -1151,7 +1145,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xC8;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         cpu.set_flag(StatusFlags::Z, true);
         ret_cond(instruction, &mut cpu);
@@ -1163,7 +1156,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xD0;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
@@ -1174,7 +1166,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xD0;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         cpu.set_flag(StatusFlags::C, true);
         ret_cond(instruction, &mut cpu);
@@ -1186,7 +1177,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xD8;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xF1F1);
@@ -1197,7 +1187,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xD8;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         cpu.set_flag(StatusFlags::C, true);
         ret_cond(instruction, &mut cpu);
@@ -1209,7 +1198,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xE0;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
@@ -1220,7 +1208,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xE0;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         cpu.set_flag(StatusFlags::P, true);
         ret_cond(instruction, &mut cpu);
@@ -1232,7 +1219,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xE8;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xF1F1);
@@ -1243,7 +1229,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xE8;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         cpu.set_flag(StatusFlags::P, true);
         ret_cond(instruction, &mut cpu);
@@ -1255,7 +1240,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xF0;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
@@ -1266,7 +1250,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xF0;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         cpu.set_flag(StatusFlags::S, true);
         ret_cond(instruction, &mut cpu);
@@ -1278,7 +1261,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xF8;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xF1F1);
@@ -1289,7 +1271,6 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xF8;
         cpu.push_address(0xAADD);
-        cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         cpu.set_flag(StatusFlags::S, true);
         ret_cond(instruction, &mut cpu);
