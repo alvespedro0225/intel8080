@@ -139,10 +139,13 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             rnc(intel8080);
         }
         _ if instruction == 0xC8 => {
-            rz(intel8080)
+            rz(intel8080);
+        }
+        _ if instruction == 0xC0 => {
+            rnz(intel8080);
         }
         _ if instruction == 0xCD => {
-            call(intel8080)
+            call(intel8080);
         }
         _ => {}
     }
@@ -467,30 +470,36 @@ fn get_sss(instruction: u8, intel8080: &mut Intel8080) -> u8 {
     intel8080.get_register(&sss)
 }
 
-fn ret(intel8080: &mut Intel8080){
+fn ret(intel8080: &mut Intel8080) {
     let address = intel8080.pop_address();
     intel8080.stack_pointer -= 2;
     intel8080.program_counter = address;
 }
 
-fn rc(intel8080: &mut Intel8080){
+fn rc(intel8080: &mut Intel8080) {
     if intel8080.get_flag(StatusFlags::C) {
         ret(intel8080);
     }
 }
 
-fn rnc(intel8080: &mut Intel8080){
+fn rnc(intel8080: &mut Intel8080) {
     if !intel8080.get_flag(StatusFlags::C) {
-        ret(intel8080)
+        ret(intel8080);
     }
 }
 
-fn rz(intel8080: &mut Intel8080){
+fn rz(intel8080: &mut Intel8080) {
     if intel8080.get_flag(StatusFlags::Z) {
-        ret(intel8080)
+        ret(intel8080);
     }
 }
-fn call(intel8080: &mut Intel8080){
+
+fn rnz(intel8080: &mut Intel8080) {
+    if !intel8080.get_flag(StatusFlags::Z) {
+        ret(intel8080);
+    }
+}
+fn call(intel8080: &mut Intel8080) {
     let address = combine_next_instructions(intel8080);
     intel8080.push_address(address);
     intel8080.stack_pointer += 2;
@@ -1098,7 +1107,7 @@ mod tests {
     }
 
     #[test]
-    fn cmp(){
+    fn cmp() {
         let mut cpu = Intel8080::default();
         let instruction = 0xBB;
         cpu.set_register(Register::E, 0x5);
@@ -1106,9 +1115,9 @@ mod tests {
         cmp_sss(instruction, &mut cpu);
         assert_eq!(0b00010110, cpu.get_flags())
     }
-    
+
     #[test]
-    fn ret_t(){
+    fn ret_t() {
         let mut cpu = Intel8080::default();
         cpu.push_address(0xAADD);
         cpu.stack_pointer += 2;
@@ -1117,7 +1126,7 @@ mod tests {
         assert_eq!(cpu.program_counter, 0xAADD);
     }
     #[test]
-    fn rc_unset(){
+    fn rc_unset() {
         let mut cpu = Intel8080::default();
         cpu.push_address(0xAADD);
         cpu.stack_pointer += 2;
@@ -1127,7 +1136,7 @@ mod tests {
     }
 
     #[test]
-    fn rc_set(){
+    fn rc_set() {
         let mut cpu = Intel8080::default();
         cpu.push_address(0xAADD);
         cpu.stack_pointer += 2;
@@ -1138,7 +1147,7 @@ mod tests {
     }
 
     #[test]
-    fn rnc_unset(){
+    fn rnc_unset() {
         let mut cpu = Intel8080::default();
         cpu.push_address(0xAADD);
         cpu.stack_pointer += 2;
@@ -1148,7 +1157,7 @@ mod tests {
     }
 
     #[test]
-    fn rnc_set(){
+    fn rnc_set() {
         let mut cpu = Intel8080::default();
         cpu.push_address(0xAADD);
         cpu.stack_pointer += 2;
@@ -1159,7 +1168,7 @@ mod tests {
     }
 
     #[test]
-    fn rz_unset(){
+    fn rz_unset() {
         let mut cpu = Intel8080::default();
         cpu.push_address(0xAADD);
         cpu.stack_pointer += 2;
@@ -1169,7 +1178,7 @@ mod tests {
     }
 
     #[test]
-    fn rz_set(){
+    fn rz_set() {
         let mut cpu = Intel8080::default();
         cpu.push_address(0xAADD);
         cpu.stack_pointer += 2;
@@ -1178,9 +1187,30 @@ mod tests {
         rz(&mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
     }
+
+    #[test]
+    fn rnz_unset() {
+        let mut cpu = Intel8080::default();
+        cpu.push_address(0xAADD);
+        cpu.stack_pointer += 2;
+        cpu.program_counter = 0xF1F1;
+        rnz(&mut cpu);
+        assert_eq!(cpu.program_counter, 0xAADD);
+    }
+
+    #[test]
+    fn rnz_set() {
+        let mut cpu = Intel8080::default();
+        cpu.push_address(0xAADD);
+        cpu.stack_pointer += 2;
+        cpu.program_counter = 0xF1F1;
+        cpu.set_flag(StatusFlags::Z, true);
+        rnz(&mut cpu);
+        assert_eq!(cpu.program_counter, 0xF1F1);
+    }
     
     #[test]
-    fn call_t(){
+    fn call_t() {
         let mut cpu = Intel8080::default();
         cpu.program_counter = 0xA1B2;
         let pc = cpu.program_counter as usize;
