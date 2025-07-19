@@ -122,6 +122,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0xA8 => {
             xra_sss(instruction, intel8080);
         }
+        _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0xB0 => {
+            ora_sss(instruction, intel8080);
+        }
         _ => {}
     }
     intel8080.program_counter += 1;
@@ -417,6 +420,17 @@ fn xra_sss(instruction: u8, intel8080: &mut Intel8080) {
     let sss = get_sss(instruction, intel8080);
     let accumulator = intel8080.get_register(&Register::A);
     let result = sss ^ accumulator;
+    intel8080.set_flag(StatusFlags::C, false);
+    intel8080.set_flag(StatusFlags::AC, false);
+    intel8080.set_parity(result);
+    intel8080.set_zero_or_less(result);
+    intel8080.set_register(Register::A, result);
+}
+
+fn ora_sss(instruction: u8, intel8080: &mut Intel8080) {
+    let sss = get_sss(instruction, intel8080);
+    let accumulator = intel8080.get_register(&Register::A);
+    let result = sss | accumulator;
     intel8080.set_flag(StatusFlags::C, false);
     intel8080.set_flag(StatusFlags::AC, false);
     intel8080.set_parity(result);
@@ -1002,7 +1016,7 @@ mod tests {
     }
 
     #[test]
-    fn xra(){
+    fn xra() {
         let mut cpu = Intel8080::default();
         let instruction = 0xAF;
         cpu.set_register(Register::A, 0xB5);
@@ -1011,5 +1025,18 @@ mod tests {
         xra_sss(instruction, &mut cpu);
         assert_eq!(0, cpu.get_register(&Register::A));
         assert_eq!(0b01000110, cpu.get_flags());
+    }
+
+    #[test]
+    fn ora() {
+        let mut cpu = Intel8080::default();
+        let instruction = 0xB2;
+        cpu.set_register(Register::D, 0x8);
+        cpu.set_register(Register::A, 0x43);
+        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(StatusFlags::AC, true);
+        ora_sss(instruction, &mut cpu);
+        assert_eq!(0x4B, cpu.get_register(&Register::A));
+        assert_eq!(0b00000110, cpu.get_flags());
     }
 }
