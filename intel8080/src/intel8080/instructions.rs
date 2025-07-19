@@ -459,19 +459,18 @@ fn get_sss(instruction: u8, intel8080: &mut Intel8080) -> u8 {
 }
 
 fn ret(intel8080: &mut Intel8080){
-    let high = intel8080.stack.pop().expect("Popped from empty stack");
-    let low = intel8080.stack.pop().expect("Popped from empty stack");
+    let address = intel8080.pop_address();
     intel8080.stack_pointer -= 2;
-    intel8080.program_counter = combine_into_u16(low, high);
+    intel8080.program_counter = address;
 }
 
 fn call(intel8080: &mut Intel8080){
-    let (low, high) = split_into_u8(intel8080.program_counter + 2);
     let address = combine_next_instructions(intel8080);
-    intel8080.stack.push(low);
-    intel8080.stack.push(high);
+    intel8080.push_address(address);
+    intel8080.stack_pointer += 2;
     intel8080.program_counter = address;
 }
+
 /// Combines the next two instructions into one 16 bits number. The third byte is the msb.
 fn combine_next_instructions(intel8080: &mut Intel8080) -> u16 {
     let pc = intel8080.program_counter as usize;
@@ -485,12 +484,6 @@ fn combine_into_u16(low: u8, high: u8) -> u16 {
     let mut value = high << 8;
     value ^= low;
     value
-}
-
-fn split_into_u8(value: u16) -> (u8, u8) {
-    let low = (value & 0xFF) as u8;
-    let high = ((value  >> 8 ) & 0xFF) as u8;
-    (low, high)
 }
 enum InstructionVars {
     RP,
@@ -1091,8 +1084,7 @@ mod tests {
     #[test]
     fn ret_t(){
         let mut cpu = Intel8080::default();
-        cpu.stack.push(0xDD);
-        cpu.stack.push(0xAA);
+        cpu.push_address(0xAADD);
         cpu.stack_pointer += 2;
         cpu.program_counter = 0xF1F1;
         ret(&mut cpu);
@@ -1108,7 +1100,5 @@ mod tests {
         cpu.memory[pc + 1] = 0xDD;
         call(&mut cpu);
         assert_eq!(cpu.program_counter, 0xDDCC);
-        assert_eq!(cpu.stack[0], 0xB4);
-        assert_eq!(cpu.stack[1], 0xA1);
     }
 }
