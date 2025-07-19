@@ -1,5 +1,4 @@
 use crate::intel8080::hardware::{Intel8080, Register, RegisterPair, StatusFlags};
-use crate::intel8080::instructions;
 
 // https://en.wikipedia.org/wiki/Intel_8080#Instruction_set Instruction reference
 // https://altairclone.com/downloads/manuals/8080%20Programmers%20Manual.pdf 8080 manual
@@ -113,6 +112,12 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         }
         _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0x90 => {
             sub_sss(instruction, intel8080);
+        }
+        _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0x98 => {
+            sbb_sss(instruction, intel8080);
+        }
+        _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0xA0 => {
+            ana_sss(instruction, intel8080);
         }
         _ => {}
     }
@@ -373,7 +378,7 @@ fn adc_sss(instruction: u8, intel8080: &mut Intel8080) {
 }
 // Manual page 18, PDF's 24
 // SUB Subtract Register or Memory From Accumulator
-fn sub_sss(instruction: u8, intel8080: &mut Intel8080){
+fn sub_sss(instruction: u8, intel8080: &mut Intel8080) {
     let sub = InstructionVars::get_subset(instruction, InstructionVars::SSS);
     let sub = Register::from(sub);
     let sub = intel8080.get_register(&sub);
@@ -383,7 +388,7 @@ fn sub_sss(instruction: u8, intel8080: &mut Intel8080){
 }
 // Manual page 18, PDF's 24
 // SUB Subtract Register or Memory From Accumulator With Borrow
-fn sbb_sss(instruction: u8, intel8080: &mut Intel8080){
+fn sbb_sss(instruction: u8, intel8080: &mut Intel8080) {
     let sub = InstructionVars::get_subset(instruction, InstructionVars::SSS);
     let sub = Register::from(sub);
     let mut sub = intel8080.get_register(&sub);
@@ -395,6 +400,19 @@ fn sbb_sss(instruction: u8, intel8080: &mut Intel8080){
 
     let result = intel8080.set_status_sub(accumulator, sub, true);
     intel8080.set_register(Register::A, result);
+}
+// Manual page 19, PDF's 25
+// Logical and Register or Memory With Accumulator
+fn ana_sss(instruction: u8, intel8080: &mut Intel8080) {
+    let sss = InstructionVars::get_subset(instruction, InstructionVars::SSS);
+    let sss = Register::from(sss);
+    let sss = intel8080.get_register(&sss);
+    let accumulator = intel8080.get_register(&Register::A);
+    let result = sss & accumulator;
+    intel8080.set_register(Register::A, result);
+    intel8080.set_flag(StatusFlags::C, false);
+    intel8080.set_parity(result);
+    intel8080.set_zero_or_less(result);
 }
 /// Combines the next two instructions into one 16 bits number. The third byte is the msb.
 fn combine_next_instructions(intel8080: &mut Intel8080) -> u16 {
@@ -922,7 +940,7 @@ mod tests {
     }
 
     #[test]
-    fn adc_of(){
+    fn adc_of() {
         let mut cpu = Intel8080::default();
         let instruction = 0x86;
         cpu.set_register(Register::H, 0x10);
@@ -936,7 +954,7 @@ mod tests {
     }
 
     #[test]
-    fn sub(){
+    fn sub() {
         let mut cpu = Intel8080::default();
         let instruction = 0x97;
         cpu.set_register(Register::A, 0x3E);
@@ -946,7 +964,7 @@ mod tests {
     }
 
     #[test]
-    fn sbb(){
+    fn sbb() {
         let mut cpu = Intel8080::default();
         let instruction = 0x9D;
         cpu.set_register(Register::A, 0x4);
@@ -955,5 +973,16 @@ mod tests {
         sbb_sss(instruction, &mut cpu);
         assert_eq!(1, cpu.get_register(&Register::A));
         assert_eq!(0b00010010, cpu.get_flags())
+    }
+
+    #[test]
+    fn ana() {
+        let mut cpu = Intel8080::default();
+        let instruction = 0xA1;
+        cpu.set_register(Register::C, 0x0F);
+        cpu.set_register(Register::A, 0xFC);
+        ana_sss(instruction, &mut cpu);
+        assert_eq!(0xC, cpu.get_register(&Register::A));
+        assert_eq!(0b00000110, cpu.get_flags())
     }
 }
