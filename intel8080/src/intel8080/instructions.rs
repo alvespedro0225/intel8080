@@ -132,6 +132,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0xC9 => {
             ret(intel8080);
         }
+        _ if instruction == 0xD8 => {
+            rc(intel8080);
+        }
         _ if instruction == 0xCD => {
             call(intel8080)
         }
@@ -464,6 +467,11 @@ fn ret(intel8080: &mut Intel8080){
     intel8080.program_counter = address;
 }
 
+fn rc(intel8080: &mut Intel8080){
+    if intel8080.get_flag(StatusFlags::C) {
+        ret(intel8080);
+    }
+}
 fn call(intel8080: &mut Intel8080){
     let address = combine_next_instructions(intel8080);
     intel8080.push_address(address);
@@ -1090,7 +1098,27 @@ mod tests {
         ret(&mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
     }
-    
+    #[test]
+    fn rc_unset(){
+        let mut cpu = Intel8080::default();
+        cpu.push_address(0xAADD);
+        cpu.stack_pointer += 2;
+        cpu.program_counter = 0xF1F1;
+        rc(&mut cpu);
+        assert_eq!(cpu.program_counter, 0xF1F1);
+    }
+
+    #[test]
+    fn rc_set(){
+        let mut cpu = Intel8080::default();
+        cpu.push_address(0xAADD);
+        cpu.stack_pointer += 2;
+        cpu.program_counter = 0xF1F1;
+        cpu.set_flag(StatusFlags::C, true);
+        rc(&mut cpu);
+        assert_eq!(cpu.program_counter, 0xAADD);
+    }
+
     #[test]
     fn call_t(){
         let mut cpu = Intel8080::default();
