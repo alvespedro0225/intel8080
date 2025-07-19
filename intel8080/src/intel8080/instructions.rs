@@ -138,6 +138,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0xD0 => {
             rnc(intel8080);
         }
+        _ if instruction == 0xC8 => {
+            rz(intel8080)
+        }
         _ if instruction == 0xCD => {
             call(intel8080)
         }
@@ -478,6 +481,12 @@ fn rc(intel8080: &mut Intel8080){
 
 fn rnc(intel8080: &mut Intel8080){
     if !intel8080.get_flag(StatusFlags::C) {
+        ret(intel8080)
+    }
+}
+
+fn rz(intel8080: &mut Intel8080){
+    if intel8080.get_flag(StatusFlags::Z) {
         ret(intel8080)
     }
 }
@@ -1127,7 +1136,7 @@ mod tests {
         rc(&mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
     }
-    
+
     #[test]
     fn rnc_unset(){
         let mut cpu = Intel8080::default();
@@ -1149,6 +1158,27 @@ mod tests {
         assert_eq!(cpu.program_counter, 0xF1F1);
     }
 
+    #[test]
+    fn rz_unset(){
+        let mut cpu = Intel8080::default();
+        cpu.push_address(0xAADD);
+        cpu.stack_pointer += 2;
+        cpu.program_counter = 0xF1F1;
+        rz(&mut cpu);
+        assert_eq!(cpu.program_counter, 0xF1F1);
+    }
+
+    #[test]
+    fn rz_set(){
+        let mut cpu = Intel8080::default();
+        cpu.push_address(0xAADD);
+        cpu.stack_pointer += 2;
+        cpu.program_counter = 0xF1F1;
+        cpu.set_flag(StatusFlags::Z, true);
+        rz(&mut cpu);
+        assert_eq!(cpu.program_counter, 0xAADD);
+    }
+    
     #[test]
     fn call_t(){
         let mut cpu = Intel8080::default();
