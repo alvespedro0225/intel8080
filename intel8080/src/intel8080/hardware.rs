@@ -231,8 +231,9 @@ impl Intel8080 {
         let instruction = self.memory[self.program_counter as usize];
         instructions::handle_instruction(instruction, self)
     }
-    
+
     pub fn pop_address(&mut self) -> u16 {
+        // TODO deal with overflow
         let sp = &mut self.stack_pointer;
         let low = self.memory[*sp as usize] as u16;
         *sp += 1;
@@ -242,8 +243,9 @@ impl Intel8080 {
         address |= low;
         address
     }
-    
+
     pub fn push_address(&mut self, address: u16) {
+        // TODO deal with overflow
         let sp = &mut self.stack_pointer;
         let low = (address & 0xFF) as u8;
         let high = ((address  >> 8 ) & 0xFF) as u8;
@@ -316,14 +318,14 @@ impl From<u8> for Register {
     }
 }
 
-impl RegisterPair {
-    pub fn get_rp(rp: u8) -> RegisterPair {
-        match rp {
+impl From<u8> for RegisterPair {
+    fn from(value: u8) -> Self {
+        match value {
             0 => RegisterPair::BC,
             1 => RegisterPair::DE,
             2 => RegisterPair::HL,
             3 => RegisterPair::SP,
-            _ => panic!("{rp} not associated with a register pair"),
+            _ => panic!("{value} not associated with a register pair"),
         }
     }
 }
