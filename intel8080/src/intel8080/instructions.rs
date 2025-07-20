@@ -138,6 +138,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0xCD => {
             call(intel8080);
         }
+        _ if InstructionVars::negate(instruction, InstructionVars::CC) == 0xC4 => {
+            call_cond(instruction, intel8080);
+        }
         _ if InstructionVars::negate(instruction, InstructionVars::RP) == 0xC1 => {
             pop(instruction, intel8080);
         }
@@ -451,9 +454,7 @@ fn ret(intel8080: &mut Intel8080) {
 }
 
 fn ret_cond(instruction: u8, intel8080: &mut Intel8080) {
-    let cc = InstructionVars::get_subset(instruction, &InstructionVars::CC);
-
-    let condition = get_conditions(cc, intel8080);
+    let condition = InstructionVars::get_conditions(instruction, intel8080);
 
     if condition {
         ret(intel8080)
@@ -466,8 +467,7 @@ fn jmp(intel8080: &mut Intel8080) {
 }
 
 fn jmp_cond(instruction: u8, intel8080: &mut Intel8080) {
-    let cc = InstructionVars::get_subset(instruction, &InstructionVars::CC);
-    let condition = get_conditions(cc, intel8080);
+    let condition = InstructionVars::get_conditions(instruction, intel8080);
 
     if condition {
         jmp(intel8080);
@@ -480,6 +480,13 @@ fn call(intel8080: &mut Intel8080) {
     intel8080.program_counter = address;
 }
 
+fn call_cond(instruction: u8, intel8080: &mut Intel8080) {
+    let condition = InstructionVars::get_conditions(instruction, intel8080);
+
+    if condition {
+        call(intel8080);
+    }
+}
 fn pop(instruction: u8, intel8080: &mut Intel8080) {
     let rp = get_associated_paired_register(instruction);
     let popped = intel8080.pop_address();
@@ -521,19 +528,6 @@ fn combine_into_u16(low: u8, high: u8) -> u16 {
     value
 }
 
-fn get_conditions(cc: u8, intel8080: &mut Intel8080) -> bool {
-    match cc {
-        0 => !intel8080.get_flag(Flags::Z), // RNZ
-        1 => intel8080.get_flag(Flags::Z),  // RZ
-        2 => !intel8080.get_flag(Flags::C), // RNC
-        3 => intel8080.get_flag(Flags::C),  // RC
-        4 => !intel8080.get_flag(Flags::P), // RPO
-        5 => intel8080.get_flag(Flags::P),  // RPE
-        6 => !intel8080.get_flag(Flags::S), // RP
-        7 => intel8080.get_flag(Flags::S),  // RM
-        _ => panic!("Shouldn't be possible to get more than 7 out of 3 bits"),
-    }
-}
 enum InstructionVars {
     RP,
     CC,
@@ -570,6 +564,20 @@ impl InstructionVars {
         };
         let instruction = neg & instruction;
         instruction >> shift
+    }
+    fn get_conditions(instruction: u8, intel8080: &mut Intel8080) -> bool {
+        let cc = InstructionVars::get_subset(instruction, &InstructionVars::CC);
+        match cc {
+            0 => !intel8080.get_flag(Flags::Z), // RNZ
+            1 => intel8080.get_flag(Flags::Z),  // RZ
+            2 => !intel8080.get_flag(Flags::C), // RNC
+            3 => intel8080.get_flag(Flags::C),  // RC
+            4 => !intel8080.get_flag(Flags::P), // RPO
+            5 => intel8080.get_flag(Flags::P),  // RPE
+            6 => !intel8080.get_flag(Flags::S), // RP
+            7 => intel8080.get_flag(Flags::S),  // RM
+            _ => panic!("Shouldn't be possible to get more than 7 out of 3 bits"),
+        }
     }
 }
 #[cfg(test)]
