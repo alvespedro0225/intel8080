@@ -1,4 +1,4 @@
-use crate::intel8080::hardware::{Intel8080, Register, RegisterPair, Flags};
+use crate::intel8080::hardware::{Flags, Intel8080, Register, RegisterPair};
 
 // https://en.wikipedia.org/wiki/Intel_8080#Instruction_set Instruction reference
 // https://bitsavers.org/components/intel/MCS80/9800301D_8080_8085_Assembly_Language_Programming_Manual_May81.pdf 8080 manual
@@ -144,6 +144,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::RP) == 0xC5 => {
             push(instruction, intel8080)
         }
+        _ if instruction == 0xC3 => {
+            jmp(intel8080);
+        }
         _ => {}
     }
 }
@@ -243,11 +246,7 @@ fn rrc(intel8080: &mut Intel8080) {
 // Rotate Accumulator Left Through Carry
 fn ral(intel8080: &mut Intel8080) {
     let mut accumulator = intel8080.get_register(&Register::A);
-    let carry = if intel8080.get_flag(Flags::C) {
-        1
-    } else {
-        0
-    };
+    let carry = if intel8080.get_flag(Flags::C) { 1 } else { 0 };
     let new_carry = accumulator >> 7 == 1;
     intel8080.set_flag(Flags::C, new_carry);
     accumulator <<= 1;
@@ -258,11 +257,7 @@ fn ral(intel8080: &mut Intel8080) {
 // Rotate Accumulator Right Through Carry
 fn rar(intel8080: &mut Intel8080) {
     let mut accumulator = intel8080.get_register(&Register::A);
-    let carry = if intel8080.get_flag(Flags::C) {
-        1
-    } else {
-        0
-    };
+    let carry = if intel8080.get_flag(Flags::C) { 1 } else { 0 };
     let new_carry = accumulator & 1 == 1;
     intel8080.set_flag(Flags::C, new_carry);
     accumulator >>= 1;
@@ -471,6 +466,12 @@ fn ret_cond(instruction: u8, intel8080: &mut Intel8080) {
         ret(intel8080)
     }
 }
+
+fn jmp(intel8080: &mut Intel8080){
+    let address = combine_next_instructions(intel8080);
+    intel8080.program_counter = address;
+}
+
 fn call(intel8080: &mut Intel8080) {
     let address = combine_next_instructions(intel8080);
     intel8080.push_address(address);
@@ -1282,6 +1283,15 @@ mod tests {
     }
 
     #[test]
+    fn jump_t(){
+        let mut cpu = Intel8080::default();
+        cpu.memory[0] = 0xFF;
+        cpu.memory[1] = 0x2B;
+        jmp(&mut cpu);
+        assert_eq!(cpu.program_counter, 0x2BFF);
+    }
+    
+    #[test]
     fn call_t() {
         let mut cpu = Intel8080::default();
         cpu.program_counter = 0xA1B2;
@@ -1311,7 +1321,7 @@ mod tests {
     }
 
     #[test]
-    fn push_reg(){
+    fn push_reg() {
         let mut cpu = Intel8080::default();
         let instruction = 0xC5; // PUSH D
         cpu.set_register(Register::B, 0x2A);
@@ -1321,7 +1331,7 @@ mod tests {
     }
 
     #[test]
-    fn push_psw(){
+    fn push_psw() {
         let mut cpu = Intel8080::default();
         let instruction = 0xF5;
         cpu.set_register(Register::FLAGS, 0x92);
@@ -1329,5 +1339,4 @@ mod tests {
         push(instruction, &mut cpu);
         assert_eq!(0x2b92, cpu.get_register_pair(&RegisterPair::PSW))
     }
-
 }

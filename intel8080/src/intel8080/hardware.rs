@@ -248,7 +248,7 @@ impl Intel8080 {
         // TODO deal with overflow
         let sp = &mut self.stack_pointer;
         let low = (address & 0xFF) as u8;
-        let high = ((address  >> 8 ) & 0xFF) as u8;
+        let high = ((address >> 8) & 0xFF) as u8;
         *sp -= 1;
         self.memory[*sp as usize] = high;
         *sp -= 1;
@@ -330,6 +330,7 @@ impl From<u8> for RegisterPair {
     }
 }
 
+#[cfg(test)]
 pub mod tests {
     use super::*;
 
