@@ -59,23 +59,23 @@ impl Intel8080 {
     }
 
     pub fn set_register_pair(&mut self, register_pair: RegisterPair, value: u16) {
-        let (first, second) = Self::get_register_pair_subsets(value);
+        let (low, high) = Self::get_register_pair_subsets(value);
         match register_pair {
             RegisterPair::BC => {
-                self.set_register(Register::B, first);
-                self.set_register(Register::C, second)
+                self.set_register(Register::B, high);
+                self.set_register(Register::C, low)
             }
             RegisterPair::DE => {
-                self.set_register(Register::D, first);
-                self.set_register(Register::E, second);
+                self.set_register(Register::D, high);
+                self.set_register(Register::E, low);
             }
             RegisterPair::HL => {
-                self.set_register(Register::H, first);
-                self.set_register(Register::L, second);
+                self.set_register(Register::H, high);
+                self.set_register(Register::L, low);
             }
             RegisterPair::PSW => {
-                self.set_register(Register::FLAGS, first);
-                self.set_register(Register::A, second);
+                self.set_register(Register::A, high);
+                self.set_register(Register::FLAGS, low);
             }
             RegisterPair::SP => self.stack_pointer = value,
         }
@@ -164,8 +164,8 @@ impl Intel8080 {
     }
 
     fn get_register_pair_subsets(value: u16) -> (u8, u8) {
-        let first_byte = (value >> 8) as u8;
-        (first_byte, value as u8)
+        let high = (value >> 8) as u8;
+        (value as u8, high)
     }
 
     pub fn set_zero_or_less(&mut self, result: u8) {
@@ -295,8 +295,8 @@ impl Register {
             Register::H => (4, RegisterPair::HL, true),
             Register::L => (5, RegisterPair::HL, false),
             // Associated 10 so it will crash in case accessed
-            Register::FLAGS => (10, RegisterPair::PSW, true),
-            Register::A => (7, RegisterPair::PSW, false),
+            Register::FLAGS => (10, RegisterPair::PSW, false),
+            Register::A => (7, RegisterPair::PSW, true),
             Register::M => panic!("M is not associated to a pair"),
         }
     }
@@ -324,7 +324,7 @@ impl From<u8> for RegisterPair {
             0 => RegisterPair::BC,
             1 => RegisterPair::DE,
             2 => RegisterPair::HL,
-            3 => RegisterPair::SP,
+            3 => RegisterPair::PSW,
             _ => panic!("{value} not associated with a register pair"),
         }
     }

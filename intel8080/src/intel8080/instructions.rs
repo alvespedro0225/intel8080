@@ -475,7 +475,9 @@ fn call(intel8080: &mut Intel8080) {
 }
 
 fn pop(instruction: u8, intel8080: &mut Intel8080) {
-    let rp = InstructionVars::get_subset(instruction, &InstructionVars::RP);
+    let rp = get_associated_paired_register(instruction);
+    let popped = intel8080.pop_address();
+    intel8080.set_register_pair(rp, popped);
 }
 
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
@@ -1279,5 +1281,24 @@ mod tests {
         cpu.memory[pc + 1] = 0xDD;
         call(&mut cpu);
         assert_eq!(cpu.program_counter, 0xDDCC);
+    }
+
+    #[test]
+    fn pop_reg(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0xC1; // POP B
+        cpu.push_address(0xFFAA);
+        pop(instruction, &mut cpu);
+        assert_eq!(0xFFAA, cpu.get_register_pair(&RegisterPair::BC))
+    }
+    
+    #[test]
+    
+    fn pop_psw(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0xF1; // POP PSW
+        cpu.push_address(0xFFAA);
+        pop(instruction, &mut cpu);
+        assert_eq!(0xFFAA, cpu.get_register_pair(&RegisterPair::PSW))
     }
 }
