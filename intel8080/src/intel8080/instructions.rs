@@ -147,6 +147,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0xC3 => {
             jmp(intel8080);
         }
+        _ if InstructionVars::negate(instruction, InstructionVars::CC) == 0xC3 => {
+            jmp_cond(instruction, intel8080);
+        }
         _ => {}
     }
 }
@@ -450,26 +453,25 @@ fn ret(intel8080: &mut Intel8080) {
 fn ret_cond(instruction: u8, intel8080: &mut Intel8080) {
     let cc = InstructionVars::get_subset(instruction, &InstructionVars::CC);
 
-    let condition = match cc {
-        0 => !intel8080.get_flag(Flags::Z), // RNZ
-        1 => intel8080.get_flag(Flags::Z),  // RZ
-        2 => !intel8080.get_flag(Flags::C), // RNC
-        3 => intel8080.get_flag(Flags::C),  // RC
-        4 => !intel8080.get_flag(Flags::P), // RPO
-        5 => intel8080.get_flag(Flags::P),  // RPE
-        6 => !intel8080.get_flag(Flags::S), // RP
-        7 => intel8080.get_flag(Flags::S),  // RM
-        _ => panic!("Shouldn't be possible to get more than 7 out of 3 bits"),
-    };
+    let condition = get_conditions(cc, intel8080);
 
     if condition {
         ret(intel8080)
     }
 }
 
-fn jmp(intel8080: &mut Intel8080){
+fn jmp(intel8080: &mut Intel8080) {
     let address = combine_next_instructions(intel8080);
     intel8080.program_counter = address;
+}
+
+fn jmp_cond(instruction: u8, intel8080: &mut Intel8080) {
+    let cc = InstructionVars::get_subset(instruction, &InstructionVars::CC);
+    let condition = get_conditions(cc, intel8080);
+
+    if condition {
+        jmp(intel8080);
+    }
 }
 
 fn call(intel8080: &mut Intel8080) {
@@ -517,6 +519,20 @@ fn combine_into_u16(low: u8, high: u8) -> u16 {
     let mut value = high << 8;
     value ^= low;
     value
+}
+
+fn get_conditions(cc: u8, intel8080: &mut Intel8080) -> bool {
+    match cc {
+        0 => !intel8080.get_flag(Flags::Z), // RNZ
+        1 => intel8080.get_flag(Flags::Z),  // RZ
+        2 => !intel8080.get_flag(Flags::C), // RNC
+        3 => intel8080.get_flag(Flags::C),  // RC
+        4 => !intel8080.get_flag(Flags::P), // RPO
+        5 => intel8080.get_flag(Flags::P),  // RPE
+        6 => !intel8080.get_flag(Flags::S), // RP
+        7 => intel8080.get_flag(Flags::S),  // RM
+        _ => panic!("Shouldn't be possible to get more than 7 out of 3 bits"),
+    }
 }
 enum InstructionVars {
     RP,
@@ -1283,14 +1299,14 @@ mod tests {
     }
 
     #[test]
-    fn jump_t(){
+    fn jump_t() {
         let mut cpu = Intel8080::default();
         cpu.memory[0] = 0xFF;
         cpu.memory[1] = 0x2B;
         jmp(&mut cpu);
         assert_eq!(cpu.program_counter, 0x2BFF);
     }
-    
+
     #[test]
     fn call_t() {
         let mut cpu = Intel8080::default();
