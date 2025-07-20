@@ -130,23 +130,23 @@ impl Intel8080 {
         self.registers[index] = value;
     }
 
-    pub fn get_flag(&self, flag: StatusFlags) -> bool {
+    pub fn get_flag(&self, flag: Flags) -> bool {
         match flag {
-            StatusFlags::S => (self.flags >> 7) == 1,
-            StatusFlags::Z => ((self.flags >> 6) & 1) == 1,
-            StatusFlags::AC => ((self.flags >> 4) & 1) == 1,
-            StatusFlags::P => ((self.flags >> 2) & 1) == 1,
-            StatusFlags::C => (self.flags & 1) == 1,
+            Flags::S => (self.flags >> 7) == 1,
+            Flags::Z => ((self.flags >> 6) & 1) == 1,
+            Flags::AC => ((self.flags >> 4) & 1) == 1,
+            Flags::P => ((self.flags >> 2) & 1) == 1,
+            Flags::C => (self.flags & 1) == 1,
         }
     }
 
-    pub fn set_flag(&mut self, flag: StatusFlags, value: bool) {
+    pub fn set_flag(&mut self, flag: Flags, value: bool) {
         let offset = match flag {
-            StatusFlags::S => 7,
-            StatusFlags::Z => 6,
-            StatusFlags::AC => 4,
-            StatusFlags::P => 2,
-            StatusFlags::C => 0,
+            Flags::S => 7,
+            Flags::Z => 6,
+            Flags::AC => 4,
+            Flags::P => 2,
+            Flags::C => 0,
         };
 
         if value {
@@ -171,16 +171,16 @@ impl Intel8080 {
     pub fn set_zero_or_less(&mut self, result: u8) {
         match result {
             _ if result == 0 => {
-                self.set_flag(StatusFlags::Z, true);
-                self.set_flag(StatusFlags::S, false);
+                self.set_flag(Flags::Z, true);
+                self.set_flag(Flags::S, false);
             }
             _ if (result >> 7) == 1 => {
-                self.set_flag(StatusFlags::Z, false);
-                self.set_flag(StatusFlags::S, true);
+                self.set_flag(Flags::Z, false);
+                self.set_flag(Flags::S, true);
             }
             _ => {
-                self.set_flag(StatusFlags::Z, false);
-                self.set_flag(StatusFlags::S, false);
+                self.set_flag(Flags::Z, false);
+                self.set_flag(Flags::S, false);
             }
         }
     }
@@ -197,7 +197,7 @@ impl Intel8080 {
         }
 
         let is_pair = count & 1 == 0;
-        self.set_flag(StatusFlags::P, is_pair);
+        self.set_flag(Flags::P, is_pair);
     }
     pub fn set_status_add(&mut self, register: u8, added: u8, set_carry: bool) -> u8 {
         let result = u8::overflowing_add(register, added);
@@ -206,7 +206,7 @@ impl Intel8080 {
         self.set_parity(result);
         set_auxiliary_carry(self, register, added, result);
         if set_carry {
-            self.set_flag(StatusFlags::C, of)
+            self.set_flag(Flags::C, of)
         }
         return result;
 
@@ -215,7 +215,7 @@ impl Intel8080 {
             // the xor between register and added should be the same as the result, unless there was
             // a carry bit
             let aux_carry = ((register ^ added) & 0x10) != (result & 0x10);
-            slf.set_flag(StatusFlags::AC, aux_carry);
+            slf.set_flag(Flags::AC, aux_carry);
         }
     }
 
@@ -265,7 +265,7 @@ pub enum RegisterPair {
     SP,
 }
 #[derive(Debug)]
-pub enum StatusFlags {
+pub enum Flags {
     S,
     Z,
     P,
@@ -380,7 +380,7 @@ pub mod tests {
     #[test]
     fn set_status_true() {
         let mut cpu = Intel8080::default();
-        cpu.set_flag(StatusFlags::S, true);
+        cpu.set_flag(Flags::S, true);
         assert_eq!(130, cpu.flags);
     }
 
@@ -388,7 +388,7 @@ pub mod tests {
     fn set_status_false() {
         let mut cpu = Intel8080::default();
         cpu.flags = 255;
-        cpu.set_flag(StatusFlags::AC, false);
+        cpu.set_flag(Flags::AC, false);
         assert_eq!(239, cpu.flags);
     }
 

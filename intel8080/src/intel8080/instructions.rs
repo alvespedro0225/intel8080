@@ -1,4 +1,4 @@
-use crate::intel8080::hardware::{Intel8080, Register, RegisterPair, StatusFlags};
+use crate::intel8080::hardware::{Intel8080, Register, RegisterPair, Flags};
 
 // https://en.wikipedia.org/wiki/Intel_8080#Instruction_set Instruction reference
 // https://bitsavers.org/components/intel/MCS80/9800301D_8080_8085_Assembly_Language_Programming_Manual_May81.pdf 8080 manual
@@ -141,6 +141,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::RP) == 0xC1 => {
             pop(instruction, intel8080);
         }
+        _ if InstructionVars::negate(instruction, InstructionVars::RP) == 0xC5 => {
+            push(instruction, intel8080)
+        }
         _ => {}
     }
 }
@@ -203,7 +206,7 @@ fn dad_rp(instruction: u8, intel8080: &mut Intel8080) {
         u16::overflowing_add(rp, hl)
     };
 
-    intel8080.set_flag(StatusFlags::C, of);
+    intel8080.set_flag(Flags::C, of);
     intel8080.set_register_pair(RegisterPair::HL, sum);
 }
 // Manual page 17, PDF's 23
@@ -225,7 +228,7 @@ fn dcx_rp(instruction: u8, intel8080: &mut Intel8080) {
 fn rlc(intel8080: &mut Intel8080) {
     let accumulator = intel8080.get_register(&Register::A);
     let carry = accumulator >> 7 == 1;
-    intel8080.set_flag(StatusFlags::C, carry);
+    intel8080.set_flag(Flags::C, carry);
     intel8080.set_register(Register::A, accumulator.rotate_left(1))
 }
 // Manual page 21, PDF's 27
@@ -233,20 +236,20 @@ fn rlc(intel8080: &mut Intel8080) {
 fn rrc(intel8080: &mut Intel8080) {
     let accumulator = intel8080.get_register(&Register::A);
     let carry = (accumulator & 1) == 1;
-    intel8080.set_flag(StatusFlags::C, carry);
+    intel8080.set_flag(Flags::C, carry);
     intel8080.set_register(Register::A, accumulator.rotate_right(1));
 }
 // Manual page 22, PDF's 28
 // Rotate Accumulator Left Through Carry
 fn ral(intel8080: &mut Intel8080) {
     let mut accumulator = intel8080.get_register(&Register::A);
-    let carry = if intel8080.get_flag(StatusFlags::C) {
+    let carry = if intel8080.get_flag(Flags::C) {
         1
     } else {
         0
     };
     let new_carry = accumulator >> 7 == 1;
-    intel8080.set_flag(StatusFlags::C, new_carry);
+    intel8080.set_flag(Flags::C, new_carry);
     accumulator <<= 1;
     accumulator ^= carry;
     intel8080.set_register(Register::A, accumulator);
@@ -255,13 +258,13 @@ fn ral(intel8080: &mut Intel8080) {
 // Rotate Accumulator Right Through Carry
 fn rar(intel8080: &mut Intel8080) {
     let mut accumulator = intel8080.get_register(&Register::A);
-    let carry = if intel8080.get_flag(StatusFlags::C) {
+    let carry = if intel8080.get_flag(Flags::C) {
         1
     } else {
         0
     };
     let new_carry = accumulator & 1 == 1;
-    intel8080.set_flag(StatusFlags::C, new_carry);
+    intel8080.set_flag(Flags::C, new_carry);
     accumulator >>= 1;
     accumulator ^= carry << 7;
     intel8080.set_register(Register::A, accumulator);
@@ -281,20 +284,20 @@ fn daa(intel8080: &mut Intel8080) {
 
     if right > 9 {
         accumulator += 6;
-        intel8080.set_flag(StatusFlags::AC, true);
-    } else if intel8080.get_flag(StatusFlags::AC) {
+        intel8080.set_flag(Flags::AC, true);
+    } else if intel8080.get_flag(Flags::AC) {
         accumulator += 6;
-        intel8080.set_flag(StatusFlags::AC, false);
+        intel8080.set_flag(Flags::AC, false);
     }
 
     let left = (accumulator & 0xF0) >> 4;
 
     if left > 9 {
         accumulator = u8::wrapping_add(accumulator, 6 << 4);
-        intel8080.set_flag(StatusFlags::C, true);
-    } else if intel8080.get_flag(StatusFlags::C) {
+        intel8080.set_flag(Flags::C, true);
+    } else if intel8080.get_flag(Flags::C) {
         accumulator += 6 << 4;
-        intel8080.set_flag(StatusFlags::C, false);
+        intel8080.set_flag(Flags::C, false);
     }
 
     intel8080.set_register(Register::A, accumulator);
@@ -323,7 +326,7 @@ fn sta(intel8080: &mut Intel8080) {
 // Manual page 14, PDF's 20
 // Set Carry
 fn stc(intel8080: &mut Intel8080) {
-    intel8080.set_flag(StatusFlags::C, true);
+    intel8080.set_flag(Flags::C, true);
 }
 // Manual page 30, PDF's 36
 // Load Accumulator Direct
@@ -335,8 +338,8 @@ fn lda(intel8080: &mut Intel8080) {
 // Manual page 14, PDF's 20
 // Complement Carry
 fn cmc(intel8080: &mut Intel8080) {
-    let carry = intel8080.get_flag(StatusFlags::C);
-    intel8080.set_flag(StatusFlags::C, !carry);
+    let carry = intel8080.get_flag(Flags::C);
+    intel8080.set_flag(Flags::C, !carry);
 }
 // Manual page 16, PDF's 22
 //  MOV Instruction
@@ -367,7 +370,7 @@ fn adc_sss(instruction: u8, intel8080: &mut Intel8080) {
     let mut added = intel8080.get_register(&added);
     let accumulator = intel8080.get_register(&Register::A);
 
-    if intel8080.get_flag(StatusFlags::C) {
+    if intel8080.get_flag(Flags::C) {
         added += 1;
     }
 
@@ -390,7 +393,7 @@ fn sbb_sss(instruction: u8, intel8080: &mut Intel8080) {
     let mut sub = intel8080.get_register(&sub);
     let accumulator = intel8080.get_register(&Register::A);
 
-    if intel8080.get_flag(StatusFlags::C) {
+    if intel8080.get_flag(Flags::C) {
         sub += 1;
     }
 
@@ -405,9 +408,9 @@ fn ana_sss(instruction: u8, intel8080: &mut Intel8080) {
     let accumulator = intel8080.get_register(&Register::A);
     let result = sss & accumulator;
     let aux_carry = (sss & 0xF) == 0xF || (accumulator & 0xF) == 0xF;
-    intel8080.set_flag(StatusFlags::AC, aux_carry);
+    intel8080.set_flag(Flags::AC, aux_carry);
     intel8080.set_register(Register::A, result);
-    intel8080.set_flag(StatusFlags::C, false);
+    intel8080.set_flag(Flags::C, false);
     intel8080.set_parity(result);
     intel8080.set_zero_or_less(result);
 }
@@ -418,8 +421,8 @@ fn xra_sss(instruction: u8, intel8080: &mut Intel8080) {
     let sss = intel8080.get_register(&sss);
     let accumulator = intel8080.get_register(&Register::A);
     let result = sss ^ accumulator;
-    intel8080.set_flag(StatusFlags::C, false);
-    intel8080.set_flag(StatusFlags::AC, false);
+    intel8080.set_flag(Flags::C, false);
+    intel8080.set_flag(Flags::AC, false);
     intel8080.set_parity(result);
     intel8080.set_zero_or_less(result);
     intel8080.set_register(Register::A, result);
@@ -430,8 +433,8 @@ fn ora_sss(instruction: u8, intel8080: &mut Intel8080) {
     let sss = intel8080.get_register(&sss);
     let accumulator = intel8080.get_register(&Register::A);
     let result = sss | accumulator;
-    intel8080.set_flag(StatusFlags::C, false);
-    intel8080.set_flag(StatusFlags::AC, false);
+    intel8080.set_flag(Flags::C, false);
+    intel8080.set_flag(Flags::AC, false);
     intel8080.set_parity(result);
     intel8080.set_zero_or_less(result);
     intel8080.set_register(Register::A, result);
@@ -453,14 +456,14 @@ fn ret_cond(instruction: u8, intel8080: &mut Intel8080) {
     let cc = InstructionVars::get_subset(instruction, &InstructionVars::CC);
 
     let condition = match cc {
-        0 => !intel8080.get_flag(StatusFlags::Z), // RNZ
-        1 => intel8080.get_flag(StatusFlags::Z),  // RZ
-        2 => !intel8080.get_flag(StatusFlags::C), // RNC
-        3 => intel8080.get_flag(StatusFlags::C),  // RC
-        4 => !intel8080.get_flag(StatusFlags::P), // RPO
-        5 => intel8080.get_flag(StatusFlags::P),  // RPE
-        6 => !intel8080.get_flag(StatusFlags::S), // RP
-        7 => intel8080.get_flag(StatusFlags::S),  // RM
+        0 => !intel8080.get_flag(Flags::Z), // RNZ
+        1 => intel8080.get_flag(Flags::Z),  // RZ
+        2 => !intel8080.get_flag(Flags::C), // RNC
+        3 => intel8080.get_flag(Flags::C),  // RC
+        4 => !intel8080.get_flag(Flags::P), // RPO
+        5 => intel8080.get_flag(Flags::P),  // RPE
+        6 => !intel8080.get_flag(Flags::S), // RP
+        7 => intel8080.get_flag(Flags::S),  // RM
         _ => panic!("Shouldn't be possible to get more than 7 out of 3 bits"),
     };
 
@@ -478,6 +481,12 @@ fn pop(instruction: u8, intel8080: &mut Intel8080) {
     let rp = get_associated_paired_register(instruction);
     let popped = intel8080.pop_address();
     intel8080.set_register_pair(rp, popped);
+}
+
+fn push(instruction: u8, intel8080: &mut Intel8080) {
+    let rp = get_associated_paired_register(instruction);
+    let pushed = intel8080.get_register_pair(&rp);
+    intel8080.push_address(pushed);
 }
 
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
@@ -704,7 +713,7 @@ mod tests {
         let ins = 0b00010101;
         cpu.set_register(Register::D, 1);
         dcr_ddd(ins, &mut cpu);
-        assert_eq!(cpu.get_flag(StatusFlags::Z), true)
+        assert_eq!(cpu.get_flag(Flags::Z), true)
     }
 
     #[test]
@@ -713,7 +722,7 @@ mod tests {
         let ins = 0b00011101;
         cpu.set_register(Register::E, 0b00100000);
         dcr_ddd(ins, &mut cpu);
-        assert_eq!(cpu.get_flag(StatusFlags::AC), false);
+        assert_eq!(cpu.get_flag(Flags::AC), false);
     }
 
     #[test]
@@ -722,7 +731,7 @@ mod tests {
         let ins = 0b00100101;
         cpu.set_register(Register::H, 0b00110111);
         dcr_ddd(ins, &mut cpu);
-        assert_eq!(cpu.get_flag(StatusFlags::P), true);
+        assert_eq!(cpu.get_flag(Flags::P), true);
     }
 
     #[test]
@@ -730,7 +739,7 @@ mod tests {
         let mut cpu = Intel8080::default();
         let ins = 0b00011101;
         dcr_ddd(ins, &mut cpu);
-        assert_eq!(cpu.get_flag(StatusFlags::S), true)
+        assert_eq!(cpu.get_flag(Flags::S), true)
     }
 
     #[test]
@@ -748,10 +757,10 @@ mod tests {
         let instruction = 0b00001001;
         cpu.set_register_pair(RegisterPair::BC, 0x339F);
         cpu.set_register_pair(RegisterPair::HL, 0xA17B);
-        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(Flags::C, true);
         dad_rp(instruction, &mut cpu);
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0xD51A);
-        assert_eq!(cpu.get_flag(StatusFlags::C), false)
+        assert_eq!(cpu.get_flag(Flags::C), false)
     }
 
     #[test]
@@ -762,7 +771,7 @@ mod tests {
         cpu.set_register_pair(RegisterPair::DE, 0xFF);
         dad_rp(instruction, &mut cpu);
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0xFE);
-        assert_eq!(cpu.get_flag(StatusFlags::C), true)
+        assert_eq!(cpu.get_flag(Flags::C), true)
     }
 
     #[test]
@@ -770,10 +779,10 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0b00101001;
         cpu.set_register_pair(RegisterPair::HL, 0xFF);
-        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(Flags::C, true);
         dad_rp(instruction, &mut cpu);
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 2 * 0xFF);
-        assert_eq!(cpu.get_flag(StatusFlags::C), false)
+        assert_eq!(cpu.get_flag(Flags::C), false)
     }
 
     #[test]
@@ -784,7 +793,7 @@ mod tests {
         let (res, _) = u16::overflowing_shl(0xF1AB, 1);
         dad_rp(instruction, &mut cpu);
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), res);
-        assert_eq!(cpu.get_flag(StatusFlags::C), true)
+        assert_eq!(cpu.get_flag(Flags::C), true)
     }
 
     #[test]
@@ -828,7 +837,7 @@ mod tests {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0xF2);
         rlc(&mut cpu);
-        assert_eq!(cpu.get_flag(StatusFlags::C), true);
+        assert_eq!(cpu.get_flag(Flags::C), true);
         assert_eq!(cpu.get_register(&Register::A), 0xE5);
     }
 
@@ -836,9 +845,9 @@ mod tests {
     fn rrc_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0xF2);
-        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(Flags::C, true);
         rrc(&mut cpu);
-        assert_eq!(cpu.get_flag(StatusFlags::C), false);
+        assert_eq!(cpu.get_flag(Flags::C), false);
         assert_eq!(cpu.get_register(&Register::A), 0x79)
     }
 
@@ -847,7 +856,7 @@ mod tests {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0xB5);
         ral(&mut cpu);
-        assert_eq!(cpu.get_flag(StatusFlags::C), true);
+        assert_eq!(cpu.get_flag(Flags::C), true);
         assert_eq!(cpu.get_register(&Register::A), 0x6A);
     }
 
@@ -855,9 +864,9 @@ mod tests {
     fn rar_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 0x6A);
-        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(Flags::C, true);
         rar(&mut cpu);
-        assert_eq!(cpu.get_flag(StatusFlags::C), false);
+        assert_eq!(cpu.get_flag(Flags::C), false);
         assert_eq!(cpu.get_register(&Register::A), 0xB5);
     }
 
@@ -925,7 +934,7 @@ mod tests {
     fn stc_t() {
         let mut cpu = Intel8080::default();
         stc(&mut cpu);
-        assert_eq!(true, cpu.get_flag(StatusFlags::C));
+        assert_eq!(true, cpu.get_flag(Flags::C));
     }
 
     #[test]
@@ -942,15 +951,15 @@ mod tests {
     fn cmc_unset() {
         let mut cpu = Intel8080::default();
         cmc(&mut cpu);
-        assert_eq!(true, cpu.get_flag(StatusFlags::C));
+        assert_eq!(true, cpu.get_flag(Flags::C));
     }
 
     #[test]
     fn cmc_set() {
         let mut cpu = Intel8080::default();
-        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(Flags::C, true);
         cmc(&mut cpu);
-        assert_eq!(false, cpu.get_flag(StatusFlags::C));
+        assert_eq!(false, cpu.get_flag(Flags::C));
     }
 
     #[test]
@@ -1008,7 +1017,7 @@ mod tests {
         let instruction = 0x89;
         cpu.set_register(Register::C, 0x3D);
         cpu.set_register(Register::A, 0x42);
-        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(Flags::C, true);
         adc_sss(instruction, &mut cpu);
         assert_eq!(cpu.get_register(&Register::A), 0x80);
         assert_eq!(cpu.get_flags(), 0b10010010);
@@ -1022,7 +1031,7 @@ mod tests {
         cpu.set_register(Register::L, 0xAB);
         cpu.set_register(Register::M, 0xF);
         cpu.set_register(Register::A, 0xF0);
-        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(Flags::C, true);
         adc_sss(instruction, &mut cpu);
         assert_eq!(0, cpu.get_register(&Register::A));
         assert_eq!(0b01000111, cpu.get_flags())
@@ -1044,7 +1053,7 @@ mod tests {
         let instruction = 0x9D;
         cpu.set_register(Register::A, 0x4);
         cpu.set_register(Register::L, 0x2);
-        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(Flags::C, true);
         sbb_sss(instruction, &mut cpu);
         assert_eq!(1, cpu.get_register(&Register::A));
         assert_eq!(0b00010010, cpu.get_flags())
@@ -1066,8 +1075,8 @@ mod tests {
         let mut cpu = Intel8080::default();
         let instruction = 0xAF;
         cpu.set_register(Register::A, 0xB5);
-        cpu.set_flag(StatusFlags::AC, true);
-        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(Flags::AC, true);
+        cpu.set_flag(Flags::C, true);
         xra_sss(instruction, &mut cpu);
         assert_eq!(0, cpu.get_register(&Register::A));
         assert_eq!(0b01000110, cpu.get_flags());
@@ -1079,8 +1088,8 @@ mod tests {
         let instruction = 0xB2;
         cpu.set_register(Register::D, 0x8);
         cpu.set_register(Register::A, 0x43);
-        cpu.set_flag(StatusFlags::C, true);
-        cpu.set_flag(StatusFlags::AC, true);
+        cpu.set_flag(Flags::C, true);
+        cpu.set_flag(Flags::AC, true);
         ora_sss(instruction, &mut cpu);
         assert_eq!(0x4B, cpu.get_register(&Register::A));
         assert_eq!(0b00000110, cpu.get_flags());
@@ -1120,7 +1129,7 @@ mod tests {
         let instruction = 0xC0;
         cpu.push_address(0xAADD);
         cpu.program_counter = 0xF1F1;
-        cpu.set_flag(StatusFlags::Z, true);
+        cpu.set_flag(Flags::Z, true);
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xF1F1);
     }
@@ -1141,7 +1150,7 @@ mod tests {
         let instruction = 0xC8;
         cpu.push_address(0xAADD);
         cpu.program_counter = 0xF1F1;
-        cpu.set_flag(StatusFlags::Z, true);
+        cpu.set_flag(Flags::Z, true);
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
     }
@@ -1162,7 +1171,7 @@ mod tests {
         let instruction = 0xD0;
         cpu.push_address(0xAADD);
         cpu.program_counter = 0xF1F1;
-        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(Flags::C, true);
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xF1F1);
     }
@@ -1183,7 +1192,7 @@ mod tests {
         let instruction = 0xD8;
         cpu.push_address(0xAADD);
         cpu.program_counter = 0xF1F1;
-        cpu.set_flag(StatusFlags::C, true);
+        cpu.set_flag(Flags::C, true);
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
     }
@@ -1204,7 +1213,7 @@ mod tests {
         let instruction = 0xE0;
         cpu.push_address(0xAADD);
         cpu.program_counter = 0xF1F1;
-        cpu.set_flag(StatusFlags::P, true);
+        cpu.set_flag(Flags::P, true);
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xF1F1);
     }
@@ -1225,7 +1234,7 @@ mod tests {
         let instruction = 0xE8;
         cpu.push_address(0xAADD);
         cpu.program_counter = 0xF1F1;
-        cpu.set_flag(StatusFlags::P, true);
+        cpu.set_flag(Flags::P, true);
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
     }
@@ -1246,7 +1255,7 @@ mod tests {
         let instruction = 0xF0;
         cpu.push_address(0xAADD);
         cpu.program_counter = 0xF1F1;
-        cpu.set_flag(StatusFlags::S, true);
+        cpu.set_flag(Flags::S, true);
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xF1F1);
     }
@@ -1267,7 +1276,7 @@ mod tests {
         let instruction = 0xF8;
         cpu.push_address(0xAADD);
         cpu.program_counter = 0xF1F1;
-        cpu.set_flag(StatusFlags::S, true);
+        cpu.set_flag(Flags::S, true);
         ret_cond(instruction, &mut cpu);
         assert_eq!(cpu.program_counter, 0xAADD);
     }
@@ -1284,21 +1293,41 @@ mod tests {
     }
 
     #[test]
-    fn pop_reg(){
+    fn pop_reg() {
         let mut cpu = Intel8080::default();
         let instruction = 0xC1; // POP B
         cpu.push_address(0xFFAA);
         pop(instruction, &mut cpu);
         assert_eq!(0xFFAA, cpu.get_register_pair(&RegisterPair::BC))
     }
-    
+
     #[test]
-    
-    fn pop_psw(){
+    fn pop_psw() {
         let mut cpu = Intel8080::default();
         let instruction = 0xF1; // POP PSW
         cpu.push_address(0xFFAA);
         pop(instruction, &mut cpu);
-        assert_eq!(0xFFAA, cpu.get_register_pair(&RegisterPair::PSW))
+        assert_eq!(0xFFAA, cpu.get_register_pair(&RegisterPair::PSW));
     }
+
+    #[test]
+    fn push_reg(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0xC5; // PUSH D
+        cpu.set_register(Register::B, 0x2A);
+        cpu.set_register(Register::C, 0x4C);
+        push(instruction, &mut cpu);
+        assert_eq!(0x2A4C, cpu.pop_address())
+    }
+
+    #[test]
+    fn push_psw(){
+        let mut cpu = Intel8080::default();
+        let instruction = 0xF5;
+        cpu.set_register(Register::FLAGS, 0x92);
+        cpu.set_register(Register::A, 0x2B);
+        push(instruction, &mut cpu);
+        assert_eq!(0x2b92, cpu.get_register_pair(&RegisterPair::PSW))
+    }
+
 }
