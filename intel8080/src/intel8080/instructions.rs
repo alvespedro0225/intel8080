@@ -132,13 +132,13 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0xC9 => {
             ret(intel8080);
         }
-        _ if InstructionVars::negate(instruction, InstructionVars::CC) == 0xC0 => {
+        _ if InstructionVars::negate(instruction, InstructionVars::DDD) == 0xC0 => {
             ret_cond(instruction, intel8080);
         }
         _ if instruction == 0xCD => {
             call(intel8080);
         }
-        _ if InstructionVars::negate(instruction, InstructionVars::CC) == 0xC4 => {
+        _ if InstructionVars::negate(instruction, InstructionVars::DDD) == 0xC4 => {
             call_cond(instruction, intel8080);
         }
         _ if InstructionVars::negate(instruction, InstructionVars::RP) == 0xC1 => {
@@ -150,8 +150,12 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0xC3 => {
             jmp(intel8080);
         }
-        _ if InstructionVars::negate(instruction, InstructionVars::CC) == 0xC3 => {
+        _ if InstructionVars::negate(instruction, InstructionVars::DDD) == 0xC3 => {
             jmp_cond(instruction, intel8080);
+        }
+        _ if instruction == 0xC6 => {
+            adi(intel8080);
+            intel8080.program_counter += 1;
         }
         _ => {}
     }
@@ -499,6 +503,13 @@ fn push(instruction: u8, intel8080: &mut Intel8080) {
     intel8080.push_address(pushed);
 }
 
+fn adi(intel8080: &mut Intel8080) {
+    let added = intel8080.memory[intel8080.program_counter as usize];
+    let accumulator = intel8080.get_register(&Register::A);
+    let result = intel8080.set_status_add(accumulator, added, true);
+    intel8080.set_register(Register::A, result);
+}
+
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
     let subset = InstructionVars::get_subset(instruction, &var);
 
@@ -530,17 +541,15 @@ fn combine_into_u16(low: u8, high: u8) -> u16 {
 
 enum InstructionVars {
     RP,
-    CC,
     DDD,
-    N,
     SSS,
 }
 
 impl InstructionVars {
     fn negate(instruction: u8, var: InstructionVars) -> u8 {
         let neg = match var {
-            InstructionVars::RP | InstructionVars::CC => !(0b11 << 4),
-            InstructionVars::DDD | InstructionVars::N => !(0b111 << 3),
+            InstructionVars::RP => !(0b11 << 4),
+            InstructionVars::DDD => !(0b111 << 3),
             InstructionVars::SSS => !0b111,
         };
         instruction & neg
@@ -553,7 +562,7 @@ impl InstructionVars {
                 shift = 4;
                 0b11 << shift
             }
-            InstructionVars::DDD | InstructionVars::N | InstructionVars::CC => {
+            InstructionVars::DDD => {
                 shift = 3;
                 0b111 << shift
             }
@@ -566,7 +575,7 @@ impl InstructionVars {
         instruction >> shift
     }
     fn get_conditions(instruction: u8, intel8080: &mut Intel8080) -> bool {
-        let cc = InstructionVars::get_subset(instruction, &InstructionVars::CC);
+        let cc = InstructionVars::get_subset(instruction, &InstructionVars::DDD);
         match cc {
             0 => !intel8080.get_flag(Flags::Z), // RNZ
             1 => intel8080.get_flag(Flags::Z),  // RZ
@@ -1362,5 +1371,25 @@ mod tests {
         cpu.set_register(Register::A, 0x2B);
         push(instruction, &mut cpu);
         assert_eq!(0x2b92, cpu.get_register_pair(&RegisterPair::PSW))
+    }
+
+    #[test]
+    fn adi_t() {
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 0x14);
+        cpu.memory[0] = 0x42;
+        adi(&mut cpu);
+        assert_eq!(0x56, cpu.get_register(&Register::A));
+        assert_eq!(0b00000110, cpu.get_flags());
+    }
+
+    #[test]
+    fn adi_of() {
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 0xFF);
+        cpu.memory[0] = 0xFF;
+        adi(&mut cpu);
+        assert_eq!(0xFE, cpu.get_register(&Register::A));
+        assert_eq!(0b10010011, cpu.get_flags());
     }
 }
