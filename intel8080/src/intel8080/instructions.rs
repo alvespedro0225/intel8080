@@ -165,6 +165,10 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             sui(intel8080);
             intel8080.program_counter += 1;
         }
+        _ if instruction == 0xDE => {
+            sbi(intel8080);
+            intel8080.program_counter += 1;
+        }
         _ => {}
     }
 }
@@ -526,13 +530,12 @@ fn adi(intel8080: &mut Intel8080) {
 fn aci(intel8080: &mut Intel8080) {
     let added = intel8080.memory[intel8080.program_counter as usize];
     let accumulator = intel8080.get_register(&Register::A);
-    let result: u8;
 
-    if intel8080.get_flag(Flags::C) {
-        result = add_with_carry(intel8080, accumulator, added);
+    let result = if intel8080.get_flag(Flags::C) {
+        add_with_carry(intel8080, accumulator, added)
     } else {
-        result = intel8080.set_flags_add(accumulator, added, true);
-    }
+        intel8080.set_flags_add(accumulator, added, true)
+    };
 
     intel8080.set_register(Register::A, result);
 }
@@ -543,6 +546,18 @@ fn sui(intel8080: &mut Intel8080) {
     let result = intel8080.set_flags_sub(accumulator, sub, true);
     intel8080.set_register(Register::A, result)
 }
+
+fn sbi(intel8080: &mut Intel8080) {
+    let sub = intel8080.memory[intel8080.program_counter as usize];
+    let accumulator = intel8080.get_register(&Register::A);
+    let result = if intel8080.get_flag(Flags::C) {
+        sub_with_carry(intel8080, accumulator, sub)
+    } else {
+        intel8080.set_flags_sub(accumulator, sub, true)
+    };
+    intel8080.set_register(Register::A, result)
+}
+
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
     let subset = InstructionVars::get_subset(instruction, &var);
 
@@ -592,7 +607,9 @@ fn sub_with_carry(intel8080: &mut Intel8080, accumulator: u8, sub: u8) -> u8 {
     // sub + 1 cause adding the carry to the subtracting number. not adding the + 1 from 2's
     // complement becausse teh add with carry adds 1 by default
     let res = add_with_carry(intel8080, accumulator, !u8::wrapping_add(sub, 1));
-    intel8080.flip_carry();
+    if sub != u8::MAX {
+        intel8080.flip_carry();
+    }
     res
 }
 enum InstructionVars {
@@ -1171,14 +1188,14 @@ mod tests {
     }
 
     #[test]
-    fn sbb_255() {
+    fn sbb_max() {
         let mut cpu = Intel8080::default();
         let instruction = 0x97; // SUB A
         cpu.set_register(Register::A, 255);
         cpu.set_flag(Flags::C, true);
         sbb_sss(instruction, &mut cpu);
         assert_eq!(255, cpu.get_register(&Register::A));
-        assert_eq!(0b10010110, cpu.get_flags());
+        assert_eq!(0b10010111, cpu.get_flags());
     }
 
     #[test]
@@ -1562,5 +1579,37 @@ mod tests {
         sui(&mut cpu);
         assert_eq!(101, cpu.get_register(&Register::A));
         assert_eq!(0b00000111, cpu.get_flags());
+    }
+
+    #[test]
+    fn sbi_t() {
+        let mut cpu = Intel8080::default();
+        cpu.memory[0] = 30;
+        cpu.set_register(Register::A, 100);
+        cpu.set_flag(Flags::C, true);
+        sbi(&mut cpu);
+        assert_eq!(69, cpu.get_register(&Register::A));
+        assert_eq!(0b00000010, cpu.get_flags());
+    }
+
+    #[test]
+    fn sbi_zero() {
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 100);
+        cpu.set_flag(Flags::C, true);
+        sbi(&mut cpu);
+        assert_eq!(99, cpu.get_register(&Register::A));
+        assert_eq!(0b00010110, cpu.get_flags());
+    }
+
+    #[test]
+    fn sbi_max() {
+        let mut cpu = Intel8080::default();
+        cpu.memory[0] = 255;
+        cpu.set_register(Register::A, 100);
+        cpu.set_flag(Flags::C, true);
+        sbi(&mut cpu);
+        assert_eq!(100, cpu.get_register(&Register::A));
+        assert_eq!(0b00010011, cpu.get_flags());
     }
 }
