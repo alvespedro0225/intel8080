@@ -192,6 +192,10 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             out(intel8080);
             intel8080.program_counter += 1;
         }
+        _ if instruction == 0xD8 => {
+            inp(intel8080);
+            intel8080.program_counter += 1;
+        }
         _ => {}
     }
 }
@@ -637,6 +641,11 @@ fn out(intel8080: &mut Intel8080) {
     intel8080.ports[address] = intel8080.get_register(&Register::A);
 }
 
+
+fn inp(intel8080: &mut Intel8080) {
+    let address = intel8080.memory[intel8080.program_counter as usize] as usize;
+    intel8080.set_register(Register::A, intel8080.ports[address]);
+}
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
     let subset = InstructionVars::get_subset(instruction, &var);
 
@@ -1776,5 +1785,14 @@ mod tests {
         cpu.set_register(Register::A, 0x11);
         out(&mut cpu);
         assert_eq!(cpu.ports[0x50], 0x11);
+    }
+    
+    #[test]
+    fn inp_t(){
+        let mut cpu = Intel8080::default();
+        cpu.memory[0] = 0xAB;
+        cpu.ports[0xAB] = 0xCC;
+        inp(&mut cpu);
+        assert_eq!(cpu.get_register(&Register::A), 0xCC);
     }
 }
