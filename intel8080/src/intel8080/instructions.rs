@@ -196,6 +196,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             inp(intel8080);
             intel8080.program_counter += 1;
         }
+        _ if instruction == 0xE3 => {
+            xthl(intel8080);
+        }
         _ => {}
     }
 }
@@ -645,6 +648,12 @@ fn out(intel8080: &mut Intel8080) {
 fn inp(intel8080: &mut Intel8080) {
     let address = intel8080.memory[intel8080.program_counter as usize] as usize;
     intel8080.set_register(Register::A, intel8080.ports[address]);
+}
+
+fn xthl(intel8080: &mut Intel8080) {
+    let popped = intel8080.pop_address();
+    intel8080.push_address(intel8080.get_register_pair(&RegisterPair::HL));
+    intel8080.set_register_pair(RegisterPair::HL, popped);
 }
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
     let subset = InstructionVars::get_subset(instruction, &var);
@@ -1786,7 +1795,7 @@ mod tests {
         out(&mut cpu);
         assert_eq!(cpu.ports[0x50], 0x11);
     }
-    
+
     #[test]
     fn inp_t(){
         let mut cpu = Intel8080::default();
@@ -1794,5 +1803,15 @@ mod tests {
         cpu.ports[0xAB] = 0xCC;
         inp(&mut cpu);
         assert_eq!(cpu.get_register(&Register::A), 0xCC);
+    }
+
+    #[test]
+    fn xthl_t(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register_pair(RegisterPair::HL, 0x0B3C);
+        cpu.push_address(0x0DF0);
+        xthl(&mut cpu);
+        assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0x0DF0);
+        assert_eq!(cpu.pop_address(), 0x0B3C);
     }
 }
