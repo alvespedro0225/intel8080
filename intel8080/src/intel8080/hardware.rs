@@ -16,7 +16,7 @@ pub struct Intel8080 {
     // 0x4000 =-> ... RAM mirror
     pub memory: [u8; MEMORY_SIZE],
     registers: [u8; REGISTER_NUMBER],
-    ports: [u8; PORT_SIZE],
+    pub ports: [u8; PORT_SIZE],
     stack_pointer: u16,
     pub program_counter: u16,
     pub stopped: bool,
