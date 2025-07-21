@@ -177,6 +177,10 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             xri(intel8080);
             intel8080.program_counter += 1;
         }
+        _ if instruction == 0xF6 => {
+            ori(intel8080);
+            intel8080.program_counter += 1;
+        }
         _ => {}
     }
 }
@@ -589,6 +593,16 @@ fn xri(intel8080: &mut Intel8080) {
     intel8080.set_flag(Flags::AC, false);
 }
 
+fn ori(intel8080: &mut Intel8080){
+    let next_byte = intel8080.memory[intel8080.program_counter as usize];
+    let accumulator = intel8080.get_register(&Register::A);
+    let res = next_byte | accumulator;
+    intel8080.set_register(Register::A, res);
+    intel8080.set_parity(res);
+    intel8080.set_zero_or_less(res);
+    intel8080.set_flag(Flags::C, false);
+    intel8080.set_flag(Flags::AC, false);
+}
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
     let subset = InstructionVars::get_subset(instruction, &var);
 
@@ -1655,12 +1669,22 @@ mod tests {
     }
 
     #[test]
-    fn xri_t(){
+    fn xri_t() {
         let mut cpu = Intel8080::default();
         cpu.memory[0] = 0xBC;
         cpu.set_register(Register::A, 0x2B);
         xri(&mut cpu);
         assert_eq!(0x97, cpu.get_register(&Register::A));
+        assert_eq!(0b10000010, cpu.get_flags());
+    }
+
+    #[test]
+    fn ori_t() {
+        let mut cpu = Intel8080::default();
+        cpu.memory[0] = 0xBC;
+        cpu.set_register(Register::A, 0x2B);
+        ori(&mut cpu);
+        assert_eq!(0xBF, cpu.get_register(&Register::A));
         assert_eq!(0b10000010, cpu.get_flags());
     }
 }
