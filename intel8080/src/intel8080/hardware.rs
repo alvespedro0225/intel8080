@@ -1,6 +1,7 @@
 use crate::intel8080::instructions;
-const MEMORY_SIZE: usize = 2usize.pow(16);
+const MEMORY_SIZE: usize = 0x10000;
 const REGISTER_NUMBER: usize = 7;
+const PORT_SIZE:usize = 256;
 
 pub struct Intel8080 {
     // https://web.archive.org/web/20240118230903/http://www.emulator101.com/memory-maps.html
@@ -15,6 +16,7 @@ pub struct Intel8080 {
     // 0x4000 =-> ... RAM mirror
     pub memory: [u8; MEMORY_SIZE],
     registers: [u8; REGISTER_NUMBER],
+    ports: [u8; PORT_SIZE],
     stack_pointer: u16,
     pub program_counter: u16,
     pub stopped: bool,
@@ -30,6 +32,7 @@ impl Default for Intel8080 {
     fn default() -> Self {
         Intel8080 {
             memory: [0; MEMORY_SIZE],
+            ports: [0; PORT_SIZE],
             stack_pointer: 0x100,
             program_counter: 0,
             flags: 2,

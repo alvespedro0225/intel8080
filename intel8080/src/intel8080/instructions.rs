@@ -185,6 +185,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             cpi(intel8080);
             intel8080.program_counter += 1;
         }
+        _ if InstructionVars::negate(instruction, InstructionVars::DDD) == 0xC7 => {
+            rst(instruction, intel8080);
+        }
         _ => {}
     }
 }
@@ -613,11 +616,18 @@ fn ori(intel8080: &mut Intel8080) {
 fn cpi(intel8080: &mut Intel8080) {
     // Comparisons are performed by subtracting the specified byte from the contents of the
     // accumulator, which is why the zero and carry flags indicate the result.
-
     let next_byte = intel8080.memory[intel8080.program_counter as usize];
     let accumulator = intel8080.get_register(&Register::A);
     intel8080.set_flags_sub(accumulator, next_byte, true);
 }
+
+fn rst(instruction: u8, intel8080: &mut Intel8080) {
+   intel8080.push_address(intel8080.program_counter);
+    let address = InstructionVars::get_subset(instruction, &InstructionVars::DDD);
+    let address = address << 3;
+    intel8080.program_counter = address as u16;
+}
+
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
     let subset = InstructionVars::get_subset(instruction, &var);
 
