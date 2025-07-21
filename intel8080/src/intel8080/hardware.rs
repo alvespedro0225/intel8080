@@ -168,6 +168,9 @@ impl Intel8080 {
         (value as u8, high)
     }
 
+    pub fn flip_carry(&mut self){
+        self.flags ^= 1;
+    }
     pub fn set_zero_or_less(&mut self, result: u8) {
         match result {
             _ if result == 0 => {
@@ -222,7 +225,7 @@ impl Intel8080 {
     pub fn set_status_sub(&mut self, register: u8, sub: u8, set_carry: bool) -> u8 {
         let result = self.set_status_add(register, !sub + 1, set_carry);
         if set_carry {
-            self.flags ^= 1;
+            self.flip_carry();
         }
         result
     }
