@@ -208,6 +208,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0xF9 => {
             sphl(intel8080);
         }
+        _ if instruction == 0xF3 => {
+            di(intel8080);
+        }
         _ => {}
     }
 }
@@ -678,6 +681,10 @@ fn xchg(intel8080: &mut Intel8080) {
 fn sphl(intel8080: &mut Intel8080) {
     let hl = intel8080.get_register_pair(&RegisterPair::HL);
     intel8080.set_register_pair(RegisterPair::SP, hl);
+}
+
+fn di(intel8080: &mut Intel8080) {
+    intel8080.interrupt_enabled = false;
 }
 
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
@@ -1860,9 +1867,9 @@ mod tests {
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0xDEDE);
         assert_eq!(cpu.get_register_pair(&RegisterPair::SP), sp);
     }
-    
+
     #[test]
-    fn sphl_t(){
+    fn sphl_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register_pair(RegisterPair::HL, 0xFFAA);
         sphl(&mut cpu);
