@@ -199,6 +199,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0xE3 => {
             xthl(intel8080);
         }
+        _ if instruction == 0xE9 => {
+            pchl(intel8080);
+        }
         _ => {}
     }
 }
@@ -655,6 +658,11 @@ fn xthl(intel8080: &mut Intel8080) {
     intel8080.push_address(intel8080.get_register_pair(&RegisterPair::HL));
     intel8080.set_register_pair(RegisterPair::HL, popped);
 }
+
+fn pchl(intel8080: &mut Intel8080) {
+    intel8080.program_counter = intel8080.get_register_pair(&RegisterPair::HL);
+}
+
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
     let subset = InstructionVars::get_subset(instruction, &var);
 
@@ -1813,5 +1821,14 @@ mod tests {
         xthl(&mut cpu);
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0x0DF0);
         assert_eq!(cpu.pop_address(), 0x0B3C);
+    }
+    
+    #[test]
+    fn pchl_t(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::H, 0xAA);
+        cpu.set_register(Register::L, 0xCC);
+        pchl(&mut cpu);
+        assert_eq!(0xAACC, cpu.program_counter);
     }
 }
