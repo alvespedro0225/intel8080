@@ -19,7 +19,8 @@ pub struct Intel8080 {
     pub ports: [u8; PORT_SIZE],
     stack_pointer: u16,
     pub program_counter: u16,
-    pub stopped: bool,
+    pub interrupt_enabled: bool,
+    pub halted: bool,
     // S | Z | 0 | AC | 0 | P | 1 |  C
     flags: u8,
     bc: u16,
@@ -41,7 +42,8 @@ impl Default for Intel8080 {
             hl: 0,
             psw: 0,
             registers: [0; REGISTER_NUMBER],
-            stopped: false,
+            interrupt_enabled: false,
+            halted: false,
         }
     }
 }
@@ -57,7 +59,8 @@ impl Intel8080 {
             RegisterPair::DE => self.de,
             RegisterPair::HL => self.hl,
             RegisterPair::PSW => self.psw,
-            RegisterPair::SP => self.stack_pointer,
+            RegisterPair::
+            SP => self.stack_pointer,
         }
     }
 
