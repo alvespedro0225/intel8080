@@ -202,6 +202,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0xE9 => {
             pchl(intel8080);
         }
+        _ if instruction == 0xEB => {
+            xchg(intel8080);
+        }
         _ => {}
     }
 }
@@ -636,7 +639,7 @@ fn cpi(intel8080: &mut Intel8080) {
 }
 
 fn rst(instruction: u8, intel8080: &mut Intel8080) {
-   intel8080.push_address(intel8080.program_counter);
+    intel8080.push_address(intel8080.program_counter);
     let address = InstructionVars::get_subset(instruction, &InstructionVars::DDD);
     let address = address << 3;
     intel8080.program_counter = address as u16;
@@ -646,7 +649,6 @@ fn out(intel8080: &mut Intel8080) {
     let address = intel8080.memory[intel8080.program_counter as usize] as usize;
     intel8080.ports[address] = intel8080.get_register(&Register::A);
 }
-
 
 fn inp(intel8080: &mut Intel8080) {
     let address = intel8080.memory[intel8080.program_counter as usize] as usize;
@@ -663,6 +665,12 @@ fn pchl(intel8080: &mut Intel8080) {
     intel8080.program_counter = intel8080.get_register_pair(&RegisterPair::HL);
 }
 
+fn xchg(intel8080: &mut Intel8080) {
+    let de = intel8080.get_register_pair(&RegisterPair::DE);
+    let hl = intel8080.get_register_pair(&RegisterPair::HL);
+    intel8080.set_register_pair(RegisterPair::DE, hl);
+    intel8080.set_register_pair(RegisterPair::HL, de);
+}
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
     let subset = InstructionVars::get_subset(instruction, &var);
 
@@ -1796,7 +1804,7 @@ mod tests {
     }
 
     #[test]
-    fn out_t(){
+    fn out_t() {
         let mut cpu = Intel8080::default();
         cpu.memory[0] = 0x50;
         cpu.set_register(Register::A, 0x11);
@@ -1805,7 +1813,7 @@ mod tests {
     }
 
     #[test]
-    fn inp_t(){
+    fn inp_t() {
         let mut cpu = Intel8080::default();
         cpu.memory[0] = 0xAB;
         cpu.ports[0xAB] = 0xCC;
@@ -1814,7 +1822,7 @@ mod tests {
     }
 
     #[test]
-    fn xthl_t(){
+    fn xthl_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register_pair(RegisterPair::HL, 0x0B3C);
         cpu.push_address(0x0DF0);
@@ -1822,13 +1830,23 @@ mod tests {
         assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0x0DF0);
         assert_eq!(cpu.pop_address(), 0x0B3C);
     }
-    
+
     #[test]
-    fn pchl_t(){
+    fn pchl_t() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::H, 0xAA);
         cpu.set_register(Register::L, 0xCC);
         pchl(&mut cpu);
         assert_eq!(0xAACC, cpu.program_counter);
+    }
+
+    #[test]
+    fn xchg_t() {
+        let mut cpu = Intel8080::default();
+        cpu.set_register_pair(RegisterPair::DE, 0xDEDE);
+        cpu.set_register_pair(RegisterPair::HL, 0x2B2B);
+        xchg(&mut cpu);
+        assert_eq!(cpu.get_register_pair(&RegisterPair::DE), 0x2B2B);
+        assert_eq!(cpu.get_register_pair(&RegisterPair::HL), 0xDEDE);
     }
 }
