@@ -578,7 +578,7 @@ fn add_with_carry(intel8080: &mut Intel8080, accumulator: u8, added: u8) -> u8 {
 }
 
 fn sub_with_carry(intel8080: &mut Intel8080, accumulator: u8, sub: u8) -> u8 {
-    // sub + 1 cause adding the carry to the subtracting number. not adding the + 1 from 2's 
+    // sub + 1 cause adding the carry to the subtracting number. not adding the + 1 from 2's
     // complement becausse teh add with carry adds 1 by default
     let res = add_with_carry(intel8080, accumulator, !u8::wrapping_add(sub, 1));
     intel8080.flip_carry();
@@ -794,7 +794,7 @@ mod tests {
         dcr_ddd(ins, &mut cpu);
         assert_eq!(u8::wrapping_sub(u8::MIN, 1), cpu.get_register(&Register::C));
     }
-    
+
     #[test]
     fn dcr_zero() {
         let mut cpu = Intel8080::default();
@@ -1468,5 +1468,59 @@ mod tests {
         adi(&mut cpu);
         assert_eq!(0xFE, cpu.get_register(&Register::A));
         assert_eq!(0b10010011, cpu.get_flags());
+    }
+
+    #[test]
+    fn aci_unset(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 100);
+        cpu.memory[0] = 95;
+        aci(&mut cpu);
+        assert_eq!(195, cpu.get_register(&Register::A));
+        assert_eq!(0b10010110, cpu.get_flags());
+    }
+
+    #[test]
+    fn aci_set(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 100);
+        cpu.set_flag(Flags::C, true);
+        cpu.memory[0] = 95;
+        aci(&mut cpu);
+        assert_eq!(196, cpu.get_register(&Register::A));
+        assert_eq!(0b10010010, cpu.get_flags());
+    }
+    
+    #[test]
+    fn aci_acc_max(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 255);
+        cpu.set_flag(Flags::C, true);
+        cpu.memory[0] = 95;
+        aci(&mut cpu);
+        assert_eq!(95, cpu.get_register(&Register::A));
+        assert_eq!(0b00010111, cpu.get_flags());
+    }
+    
+    #[test]
+    fn aci_next_max(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 95);
+        cpu.set_flag(Flags::C, true);
+        cpu.memory[0] = 255;
+        aci(&mut cpu);
+        assert_eq!(95, cpu.get_register(&Register::A));
+        assert_eq!(0b00010111, cpu.get_flags());
+    }
+    
+    #[test]
+    fn aci_both_max(){
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 255);
+        cpu.set_flag(Flags::C, true);
+        cpu.memory[0] = 255;
+        aci(&mut cpu);
+        assert_eq!(255, cpu.get_register(&Register::A));
+        assert_eq!(0b10010111, cpu.get_flags());
     }
 }
