@@ -202,7 +202,7 @@ impl Intel8080 {
         let is_pair = count & 1 == 0;
         self.set_flag(Flags::P, is_pair);
     }
-    pub fn set_status_add(&mut self, register: u8, added: u8, set_carry: bool) -> u8 {
+    pub fn set_flags_add(&mut self, register: u8, added: u8, set_carry: bool) -> u8 {
         let result = u8::overflowing_add(register, added);
         let (result, of) = result;
         self.set_zero_or_less(result);
@@ -222,10 +222,12 @@ impl Intel8080 {
         }
     }
 
-    pub fn set_status_sub(&mut self, register: u8, sub: u8, set_carry: bool) -> u8 {
-        let result = self.set_status_add(register, u8::wrapping_add(!sub,  1), set_carry);
+    pub fn set_flags_sub(&mut self, register: u8, sub: u8, set_carry: bool) -> u8 {
+        let result = self.set_flags_add(register, u8::wrapping_add(!sub, 1), set_carry);
         if set_carry {
-            self.flip_carry();
+            if sub != 0 {
+                self.flip_carry();
+            }
         }
         result
     }
@@ -382,14 +384,14 @@ pub mod tests {
     }
 
     #[test]
-    fn set_status_true() {
+    fn set_flag_true() {
         let mut cpu = Intel8080::default();
         cpu.set_flag(Flags::S, true);
         assert_eq!(130, cpu.flags);
     }
 
     #[test]
-    fn set_status_false() {
+    fn set_flag_false() {
         let mut cpu = Intel8080::default();
         cpu.flags = 255;
         cpu.set_flag(Flags::AC, false);
@@ -418,23 +420,23 @@ pub mod tests {
     }
 
     #[test]
-    fn set_status_addition_negative() {
+    fn set_flag_addition_negative() {
         let mut cpu = Intel8080::default();
-        cpu.set_status_add(0b10101000, 1, false);
+        cpu.set_flags_add(0b10101000, 1, false);
         assert_eq!(cpu.flags, 0b10000110)
     }
 
     #[test]
-    fn set_status_addition_positive() {
+    fn set_flag_addition_positive() {
         let mut cpu = Intel8080::default();
-        cpu.set_status_add(0b00101100, 1, false);
+        cpu.set_flags_add(0b00101100, 1, false);
         assert_eq!(cpu.flags, 0b00000110)
     }
 
     #[test]
-    fn set_status_addition_zero() {
+    fn set_flag_addition_zero() {
         let mut cpu = Intel8080::default();
-        cpu.set_status_add(255, 1, true);
+        cpu.set_flags_add(255, 1, true);
         assert_eq!(cpu.flags, 0b01010111);
     }
 }

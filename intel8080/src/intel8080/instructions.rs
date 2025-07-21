@@ -161,6 +161,10 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             aci(intel8080);
             intel8080.program_counter += 1;
         }
+        _ if instruction == 0xD6 => {
+            sui(intel8080);
+            intel8080.program_counter += 1;
+        }
         _ => {}
     }
 }
@@ -192,7 +196,7 @@ fn inx_rp(instruction: u8, intel8080: &mut Intel8080) {
 fn inr_ddd(instruction: u8, intel8080: &mut Intel8080) {
     let ddd = get_associated_register(instruction, InstructionVars::DDD);
     let register_value = intel8080.get_register(&ddd);
-    let result = intel8080.set_status_add(register_value, 1, false);
+    let result = intel8080.set_flags_add(register_value, 1, false);
     intel8080.set_register(ddd, result);
 }
 // Manual page 15, PDF's 21
@@ -200,7 +204,7 @@ fn inr_ddd(instruction: u8, intel8080: &mut Intel8080) {
 fn dcr_ddd(instruction: u8, intel8080: &mut Intel8080) {
     let ddd = get_associated_register(instruction, InstructionVars::DDD);
     let register_value = intel8080.get_register(&ddd);
-    let result = intel8080.set_status_sub(register_value, 1, false);
+    let result = intel8080.set_flags_sub(register_value, 1, false);
     intel8080.set_register(ddd, result);
 }
 // Manual page 26, PDF's 32
@@ -369,7 +373,7 @@ fn add_sss(instruction: u8, intel8080: &mut Intel8080) {
     let added = get_associated_register(instruction, InstructionVars::SSS);
     let added = intel8080.get_register(&added);
     let accumulator = intel8080.get_register(&Register::A);
-    let result = intel8080.set_status_add(accumulator, added, true);
+    let result = intel8080.set_flags_add(accumulator, added, true);
     intel8080.set_register(Register::A, result);
 }
 // Manual page 18, PDF's 24
@@ -383,7 +387,7 @@ fn adc_sss(instruction: u8, intel8080: &mut Intel8080) {
     if intel8080.get_flag(Flags::C) {
         result = add_with_carry(intel8080, accumulator, added);
     } else {
-        result = intel8080.set_status_add(accumulator, added, true);
+        result = intel8080.set_flags_add(accumulator, added, true);
     }
 
     intel8080.set_register(Register::A, result);
@@ -395,7 +399,7 @@ fn sub_sss(instruction: u8, intel8080: &mut Intel8080) {
     let sub = get_associated_register(instruction, InstructionVars::SSS);
     let sub = intel8080.get_register(&sub);
     let accumulator = intel8080.get_register(&Register::A);
-    let result = intel8080.set_status_sub(accumulator, sub, true);
+    let result = intel8080.set_flags_sub(accumulator, sub, true);
     intel8080.set_register(Register::A, result);
 }
 // Manual page 18, PDF's 24
@@ -409,7 +413,7 @@ fn sbb_sss(instruction: u8, intel8080: &mut Intel8080) {
     if intel8080.get_flag(Flags::C) {
         result = sub_with_carry(intel8080, accumulator, sub);
     } else {
-        result = intel8080.set_status_sub(accumulator, sub, true);
+        result = intel8080.set_flags_sub(accumulator, sub, true);
     }
 
     intel8080.set_register(Register::A, result);
@@ -458,7 +462,7 @@ fn cmp_sss(instruction: u8, intel8080: &mut Intel8080) {
     let sss = get_associated_register(instruction, InstructionVars::SSS);
     let sss = intel8080.get_register(&sss);
     let accumulator = intel8080.get_register(&Register::A);
-    intel8080.set_status_sub(accumulator, sss, true);
+    intel8080.set_flags_sub(accumulator, sss, true);
 }
 
 fn ret(intel8080: &mut Intel8080) {
@@ -515,7 +519,7 @@ fn push(instruction: u8, intel8080: &mut Intel8080) {
 fn adi(intel8080: &mut Intel8080) {
     let added = intel8080.memory[intel8080.program_counter as usize];
     let accumulator = intel8080.get_register(&Register::A);
-    let result = intel8080.set_status_add(accumulator, added, true);
+    let result = intel8080.set_flags_add(accumulator, added, true);
     intel8080.set_register(Register::A, result);
 }
 
@@ -527,10 +531,17 @@ fn aci(intel8080: &mut Intel8080) {
     if intel8080.get_flag(Flags::C) {
         result = add_with_carry(intel8080, accumulator, added);
     } else {
-        result = intel8080.set_status_add(accumulator, added, true);
+        result = intel8080.set_flags_add(accumulator, added, true);
     }
 
     intel8080.set_register(Register::A, result);
+}
+
+fn sui(intel8080: &mut Intel8080) {
+    let sub = intel8080.memory[intel8080.program_counter as usize];
+    let accumulator = intel8080.get_register(&Register::A);
+    let result = intel8080.set_flags_sub(accumulator, sub, true);
+    intel8080.set_register(Register::A, result)
 }
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
     let subset = InstructionVars::get_subset(instruction, &var);
@@ -1471,7 +1482,7 @@ mod tests {
     }
 
     #[test]
-    fn aci_unset(){
+    fn aci_unset() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 100);
         cpu.memory[0] = 95;
@@ -1481,7 +1492,7 @@ mod tests {
     }
 
     #[test]
-    fn aci_set(){
+    fn aci_set() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 100);
         cpu.set_flag(Flags::C, true);
@@ -1490,9 +1501,9 @@ mod tests {
         assert_eq!(196, cpu.get_register(&Register::A));
         assert_eq!(0b10010010, cpu.get_flags());
     }
-    
+
     #[test]
-    fn aci_acc_max(){
+    fn aci_acc_max() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 255);
         cpu.set_flag(Flags::C, true);
@@ -1501,9 +1512,9 @@ mod tests {
         assert_eq!(95, cpu.get_register(&Register::A));
         assert_eq!(0b00010111, cpu.get_flags());
     }
-    
+
     #[test]
-    fn aci_next_max(){
+    fn aci_next_max() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 95);
         cpu.set_flag(Flags::C, true);
@@ -1512,9 +1523,9 @@ mod tests {
         assert_eq!(95, cpu.get_register(&Register::A));
         assert_eq!(0b00010111, cpu.get_flags());
     }
-    
+
     #[test]
-    fn aci_both_max(){
+    fn aci_both_max() {
         let mut cpu = Intel8080::default();
         cpu.set_register(Register::A, 255);
         cpu.set_flag(Flags::C, true);
@@ -1522,5 +1533,34 @@ mod tests {
         aci(&mut cpu);
         assert_eq!(255, cpu.get_register(&Register::A));
         assert_eq!(0b10010111, cpu.get_flags());
+    }
+
+    #[test]
+    fn sui_t() {
+        let mut cpu = Intel8080::default();
+        cpu.memory[0] = 30;
+        cpu.set_register(Register::A, 100);
+        sui(&mut cpu);
+        assert_eq!(70, cpu.get_register(&Register::A));
+        assert_eq!(0b00000010, cpu.get_flags());
+    }
+
+    #[test]
+    fn sui_zero() {
+        let mut cpu = Intel8080::default();
+        cpu.set_register(Register::A, 100);
+        sui(&mut cpu);
+        assert_eq!(100, cpu.get_register(&Register::A));
+        assert_eq!(0b00000010, cpu.get_flags());
+    }
+
+    #[test]
+    fn sui_max() {
+        let mut cpu = Intel8080::default();
+        cpu.memory[0] = 255;
+        cpu.set_register(Register::A, 100);
+        sui(&mut cpu);
+        assert_eq!(101, cpu.get_register(&Register::A));
+        assert_eq!(0b00000111, cpu.get_flags());
     }
 }
