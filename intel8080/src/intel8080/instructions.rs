@@ -691,7 +691,7 @@ fn di(intel8080: &mut Intel8080) {
 }
 
 fn ei(intel8080: &mut Intel8080) {
-    intel8080.execute_next_instruction();
+    intel8080.execute();
     intel8080.interrupt_enabled = true;
 }
 

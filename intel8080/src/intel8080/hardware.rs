@@ -1,25 +1,17 @@
 use crate::intel8080::instructions;
 const MEMORY_SIZE: usize = 0x10000;
 const REGISTER_NUMBER: usize = 7;
-const PORT_SIZE:usize = 256;
+const PORT_SIZE: usize = 256;
 
 pub struct Intel8080 {
-    // https://web.archive.org/web/20240118230903/http://www.emulator101.com/memory-maps.html
-    // ROM:
-    // 0x0000 => 0x07FF invaders.h
-    // 0x0800 => 0x0FFF invaders.g
-    // 0x1000 => 0x17FF invaders.f
-    // 0x1800 => 0x1FFF invaders.e
-    // RAM:
-    // 0x2000 => 0x23FF Work RAM
-    // 0x2400 => 0x3FFF Video RAM
-    // 0x4000 =-> ... RAM mirror
     pub memory: [u8; MEMORY_SIZE],
     registers: [u8; REGISTER_NUMBER],
     pub ports: [u8; PORT_SIZE],
     stack_pointer: u16,
     pub program_counter: u16,
     pub interrupt_enabled: bool,
+    interrupt_instruction: u8,
+    interrupt_pending: bool,
     pub halted: bool,
     // S | Z | 0 | AC | 0 | P | 1 |  C
     flags: u8,
@@ -44,6 +36,8 @@ impl Default for Intel8080 {
             registers: [0; REGISTER_NUMBER],
             interrupt_enabled: false,
             halted: false,
+            interrupt_instruction: 0,
+            interrupt_pending: false,
         }
     }
 }
@@ -59,8 +53,7 @@ impl Intel8080 {
             RegisterPair::DE => self.de,
             RegisterPair::HL => self.hl,
             RegisterPair::PSW => self.psw,
-            RegisterPair::
-            SP => self.stack_pointer,
+            RegisterPair::SP => self.stack_pointer,
         }
     }
 
@@ -174,7 +167,7 @@ impl Intel8080 {
         (value as u8, high)
     }
 
-    pub fn flip_carry(&mut self){
+    pub fn flip_carry(&mut self) {
         self.flags ^= 1;
     }
     pub fn set_zero_or_less(&mut self, result: u8) {
@@ -238,9 +231,22 @@ impl Intel8080 {
         result
     }
 
-    pub fn execute_next_instruction(&mut self) {
-        let instruction = self.memory[self.program_counter as usize];
-        instructions::handle_instruction(instruction, self)
+    pub fn execute(&mut self) {
+        if self.interrupt_pending {
+            instructions::handle_instruction(self.interrupt_instruction, self);
+            self.interrupt_enabled = false;
+            self.interrupt_pending = false;
+        } else if !self.halted {
+            let instruction = self.memory[self.program_counter as usize];
+            instructions::handle_instruction(instruction, self)
+        }
+    }
+
+    pub fn interrupt(&mut self, op_code: u8) {
+        if self.interrupt_enabled {
+            self.interrupt_instruction = op_code;
+            self.interrupt_pending = true;
+        }
     }
 
     pub fn pop_address(&mut self) -> u16 {
