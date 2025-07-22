@@ -211,6 +211,9 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if instruction == 0xF3 => {
             di(intel8080);
         }
+        _ if instruction == 0xFB => {
+            ei(intel8080);
+        }
         _ => {}
     }
 }
@@ -685,6 +688,11 @@ fn sphl(intel8080: &mut Intel8080) {
 
 fn di(intel8080: &mut Intel8080) {
     intel8080.interrupt_enabled = false;
+}
+
+fn ei(intel8080: &mut Intel8080) {
+    intel8080.execute_next_instruction();
+    intel8080.interrupt_enabled = true;
 }
 
 fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
