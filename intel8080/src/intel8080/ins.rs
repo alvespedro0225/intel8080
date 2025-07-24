@@ -1,4 +1,4 @@
-enum Instruction {
+pub enum Instruction {
     NOP,
     LXI(u8),
     STAX(u8),
@@ -146,6 +146,18 @@ impl From<u8> for Instruction {
             0xA8 => Some(Instruction::XRA(ins_var)),
             0xB0 => Some(Instruction::ORA(ins_var)),
             0xB8 => Some(Instruction::CMP(ins_var)),
+            _ => None
+        };
+        
+        let ins_var = (opcode & (1 << 4)) >> 4;
+        
+        if let Some(ins) = instruction {
+            return ins;
+        }
+        
+        let instruction: Option<Instruction> = match opcode & !(1 <<4) {
+            0x02 => Some(Instruction::STAX(ins_var)),
+            0x0A => Some(Instruction::LDAX(ins_var)),
             _ => None
         };
         
