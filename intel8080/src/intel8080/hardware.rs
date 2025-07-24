@@ -4,7 +4,6 @@ const REGISTER_NUMBER: usize = 7;
 const PORT_SIZE: usize = 256;
 
 pub struct Intel8080 {
-    pub terminate: bool,
     pub memory: [u8; MEMORY_SIZE],
     registers: [u8; REGISTER_NUMBER],
     pub ports: [u8; PORT_SIZE],
@@ -19,15 +18,12 @@ pub struct Intel8080 {
     bc: u16,
     de: u16,
     hl: u16,
-    psw: u16, // accumulator and flags register together,
-    pub input: Box<dyn Fn(&Self, u8) -> u8>,
-    pub output: Box<dyn Fn(&Self, u8, u8)>,
+    psw: u16, // accumulator and flags register together
 }
 
 impl Default for Intel8080 {
     fn default() -> Self {
         Intel8080 {
-            terminate: false,
             memory: [0; MEMORY_SIZE],
             ports: [0; PORT_SIZE],
             stack_pointer: 0x100,
@@ -42,8 +38,6 @@ impl Default for Intel8080 {
             halted: false,
             interrupt_instruction: 0,
             interrupt_pending: false,
-            input: Box::new(|_: &Intel8080, _: u8| 0),
-            output: Box::new(|_: &Intel8080, _: u8, _: u8| {}),
         }
     }
 }
@@ -58,11 +52,7 @@ impl Intel8080 {
             RegisterPair::BC => self.bc,
             RegisterPair::DE => self.de,
             RegisterPair::HL => self.hl,
-            RegisterPair::PSW => {
-                let low = self.get_register(&Register::FLAGS) as u16;
-                let high = self.get_register(&Register::A) as u16;
-                low | (high << 8)
-            },
+            RegisterPair::PSW => self.psw,
             RegisterPair::SP => self.stack_pointer,
         }
     }
@@ -94,9 +84,6 @@ impl Intel8080 {
             Register::M => {
                 let index = self.hl as usize;
                 self.memory[index]
-            }
-            Register::FLAGS => {
-                self.flags
             }
             _ => {
                 let (mut index, _, _) = Register::get_pair_data(register);
@@ -284,7 +271,6 @@ impl Intel8080 {
         *sp -= 1;
         self.memory[*sp as usize] = low;
     }
-    
 }
 
 #[derive(Debug)]
@@ -349,14 +335,13 @@ impl From<u8> for Register {
     }
 }
 
-impl RegisterPair {
-    /// like the "From" trait, but makes the caller choose between SP/PSW  
-    pub fn get_register(value: u8, fourth: RegisterPair) -> Self {
+impl From<u8> for RegisterPair {
+    fn from(value: u8) -> Self {
         match value {
             0 => RegisterPair::BC,
             1 => RegisterPair::DE,
             2 => RegisterPair::HL,
-            3 => fourth,
+            3 => RegisterPair::PSW,
             _ => panic!("{value} not associated with a register pair"),
         }
     }

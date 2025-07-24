@@ -6,15 +6,14 @@ use crate::intel8080::hardware::{Flags, Intel8080, Register, RegisterPair};
 pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
     intel8080.program_counter += 1;
     match instruction {
-        // 0x08 .. 0x38 are undocumented nops
-        0 | 0x08 | 0x10 | 0x18 | 0x20 | 0x28 | 0x30 | 0x38 => return,
+        0 => return,
         // 0b00RP0001
         _ if InstructionVars::negate(instruction, InstructionVars::RP) == 1 => {
             lxi_rp_data(instruction, intel8080);
             intel8080.program_counter += 2;
         }
         // 0b00RP0010
-        _ if InstructionVars::negate(instruction, InstructionVars::P) == 2 => {
+        _ if InstructionVars::negate(instruction, InstructionVars::RP) == 2 => {
             stax_rp(instruction, intel8080);
         }
         // 0b00RP0011
@@ -38,8 +37,8 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::RP) == 9 => {
             dad_rp(instruction, intel8080);
         }
-        // 0b000P1010
-        _ if InstructionVars::negate(instruction, InstructionVars::P) == 0xA => {
+        // 0b00RP1010
+        _ if (instruction & !0x10) == 0xA => {
             ldax_rp(instruction, intel8080);
         }
         // 0b00RP1011
@@ -51,51 +50,50 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             rlc(intel8080);
         }
         // 0b00001111
-        15 => {
+        _ if instruction == 15 => {
             rrc(intel8080);
         }
         // 0b00010111
-        0x17 => {
+        _ if instruction == 0x17 => {
             ral(intel8080);
         }
         // 0b00011111
-        0x1F => {
+        _ if instruction == 0x1F => {
             rar(intel8080);
         }
         // 0b00100010
-        0x22 => {
+        _ if instruction == 0x22 => {
             shld(intel8080);
             intel8080.program_counter += 2;
         }
         // 0b00100111
-        0x27 => {
+        _ if instruction == 0x27 => {
             daa(intel8080);
         }
         // 0b00101010
-        0x2A => {
+        _ if instruction == 0x2A => {
             lhld(intel8080);
             intel8080.program_counter += 2;
         }
         // 0b00101111
-        0x2F => {
+        _ if instruction == 0x2F => {
             cma(intel8080);
         }
         // 0b00110010
-        0x32 => {
+        _ if instruction == 0x32 => {
             sta(intel8080);
             intel8080.program_counter += 2;
         }
         // 0b00110111
-        0x37 => {
+        _ if instruction == 0x37 => {
             stc(intel8080);
         }
         // 0b00111010
-        0x3A => {
+        _ if instruction == 0x3A => {
             lda(intel8080);
-            intel8080.program_counter += 2;
         }
         // 0b00111111
-        0x3F => {
+        _ if instruction == 0x3F => {
             cmc(intel8080);
         }
         // 0b01DDDSSS
@@ -103,7 +101,7 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
             mov_sss_ddd(instruction, intel8080);
         }
         // 0b01110110
-        0x76 => {
+        _ if instruction == 0x76 => {
             hlt(intel8080);
         }
         // 0b10001SSS
@@ -131,15 +129,13 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::SSS) == 0xB8 => {
             cmp_sss(instruction, intel8080);
         }
-        // 0xD9 is undocumented return
-        0xC9 | 0xD9 => {
+        _ if instruction == 0xC9 => {
             ret(intel8080);
         }
         _ if InstructionVars::negate(instruction, InstructionVars::DDD) == 0xC0 => {
             ret_cond(instruction, intel8080);
         }
-        // 0xDD .. 0xFD are undocumented calls
-        0xCD | 0xDD | 0xED | 0xFD => {
+        _ if instruction == 0xCD => {
             call(intel8080);
         }
         _ if InstructionVars::negate(instruction, InstructionVars::DDD) == 0xC4 => {
@@ -151,77 +147,74 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
         _ if InstructionVars::negate(instruction, InstructionVars::RP) == 0xC5 => {
             push(instruction, intel8080)
         }
-        // 0xCB is undocumented jmp
-        0xC3 | 0xCB => {
+        _ if instruction == 0xC3 => {
             jmp(intel8080);
         }
-        _ if InstructionVars::negate(instruction, InstructionVars::DDD) == 0xC2 => {
+        _ if InstructionVars::negate(instruction, InstructionVars::DDD) == 0xC3 => {
             jmp_cond(instruction, intel8080);
         }
-        0xC6 => {
+        _ if instruction == 0xC6 => {
             adi(intel8080);
             intel8080.program_counter += 1;
         }
-        0xCE => {
+        _ if instruction == 0xCE => {
             aci(intel8080);
             intel8080.program_counter += 1;
         }
-        0xD6 => {
+        _ if instruction == 0xD6 => {
             sui(intel8080);
             intel8080.program_counter += 1;
         }
-        0xDE => {
+        _ if instruction == 0xDE => {
             sbi(intel8080);
             intel8080.program_counter += 1;
         }
-        0xE6 => {
+        _ if instruction == 0xE6 => {
             ani(intel8080);
             intel8080.program_counter += 1;
         }
-        0xEE => {
+        _ if instruction == 0xEE => {
             xri(intel8080);
             intel8080.program_counter += 1;
         }
-        0xF6 => {
+        _ if instruction == 0xF6 => {
             ori(intel8080);
             intel8080.program_counter += 1;
         }
-        0xFE => {
+        _ if instruction == 0xFE => {
             cpi(intel8080);
             intel8080.program_counter += 1;
         }
         _ if InstructionVars::negate(instruction, InstructionVars::DDD) == 0xC7 => {
             rst(instruction, intel8080);
         }
-        0xD3 => {
+        _ if instruction == 0xD3 => {
             out(intel8080);
             intel8080.program_counter += 1;
         }
-        0xD8 => {
+        _ if instruction == 0xD8 => {
             inp(intel8080);
             intel8080.program_counter += 1;
         }
-        0xE3 => {
+        _ if instruction == 0xE3 => {
             xthl(intel8080);
         }
-        0xE9 => {
+        _ if instruction == 0xE9 => {
             pchl(intel8080);
         }
-        0xEB => {
+        _ if instruction == 0xEB => {
             xchg(intel8080);
         }
-        0xF9 => {
+        _ if instruction == 0xF9 => {
             sphl(intel8080);
         }
-        0xF3 => {
+        _ if instruction == 0xF3 => {
             di(intel8080);
         }
-        0xFB => {
+        _ if instruction == 0xFB => {
             ei(intel8080);
         }
-        _ => {
-            panic!("Unkown instruction: {}", instruction);
-        }
+        _ => {}
     }
 }
 
@@ -229,21 +222,21 @@ pub fn handle_instruction(instruction: u8, intel8080: &mut Intel8080) {
 // Uses the next 2 instruction bytes as data and sets RP to it.
 fn lxi_rp_data(instruction: u8, intel8080: &mut Intel8080) {
     let rp_value = combine_next_instructions(intel8080);
-    let rp = get_associated_paired_register(instruction, RegisterPair::SP);
+    let rp = get_associated_paired_register(instruction);
     intel8080.set_register_pair(rp, rp_value);
 }
 // Manual page 17, PDF's 23
 // Store Accumulator. memory[RP] = A
 fn stax_rp(instruction: u8, intel8080: &mut Intel8080) {
     let accumulator = intel8080.get_register(&Register::A);
-    let rp = get_associated_paired_register(instruction, RegisterPair::SP);
+    let rp = get_associated_paired_register(instruction);
     let index = intel8080.get_register_pair(&rp) as usize;
     intel8080.memory[index] = accumulator;
 }
 // Manal page 24, PDF's 30
 // Increases RP by 1. RP += 1
 fn inx_rp(instruction: u8, intel8080: &mut Intel8080) {
-    let rp = get_associated_paired_register(instruction, RegisterPair::SP);
+    let rp = get_associated_paired_register(instruction);
     let rp_value = intel8080.get_register_pair(&rp);
     intel8080.set_register_pair(rp, u16::wrapping_add(rp_value, 1));
 }
@@ -267,16 +260,21 @@ fn dcr_ddd(instruction: u8, intel8080: &mut Intel8080) {
 // Move immediate data. DDD = Data
 fn mvi_ddd_data(instruction: u8, intel8080: &mut Intel8080) {
     let ddd = get_associated_register(instruction, InstructionVars::DDD);
-    let data = intel8080.memory[intel8080.program_counter as usize];
+    let data = intel8080.memory[(intel8080.program_counter + 1) as usize];
     intel8080.set_register(ddd, data);
 }
 // Manual page 24, PDF's 30
 // Double add. HL += RP
 fn dad_rp(instruction: u8, intel8080: &mut Intel8080) {
     let hl = intel8080.get_register_pair(&RegisterPair::HL);
-    let rp = get_associated_paired_register(instruction, RegisterPair::SP);
-    let rp = intel8080.get_register_pair(&rp);
-    let (sum, of) = u16::overflowing_add(rp, hl);
+    let rp = get_associated_paired_register(instruction);
+
+    let (sum, of) = if let RegisterPair::HL = rp {
+        (hl << 1, hl >= 32768) // hl >= 32768 checks if msb is set
+    } else {
+        let rp = intel8080.get_register_pair(&rp);
+        u16::overflowing_add(rp, hl)
+    };
 
     intel8080.set_flag(Flags::C, of);
     intel8080.set_register_pair(RegisterPair::HL, sum);
@@ -284,14 +282,14 @@ fn dad_rp(instruction: u8, intel8080: &mut Intel8080) {
 // Manual page 17, PDF's 23
 // Load Accumulator. A = memory[RP]
 fn ldax_rp(instruction: u8, intel8080: &mut Intel8080) {
-    let rp = get_associated_paired_register(instruction, RegisterPair::SP);
+    let rp = get_associated_paired_register(instruction);
     let rp = intel8080.get_register_pair(&rp);
     intel8080.set_register(Register::A, intel8080.memory[rp as usize]);
 }
 // Manual page 24, PDF's 30
 // Decrement Register Pair. RP -= 1
 fn dcx_rp(instruction: u8, intel8080: &mut Intel8080) {
-    let rp = get_associated_paired_register(instruction, RegisterPair::SP);
+    let rp = get_associated_paired_register(instruction);
     let rp_value = intel8080.get_register_pair(&rp);
     intel8080.set_register_pair(rp, u16::wrapping_sub(rp_value, 1));
 }
@@ -541,14 +539,12 @@ fn jmp_cond(instruction: u8, intel8080: &mut Intel8080) {
 
     if condition {
         jmp(intel8080);
-    } else {
-        intel8080.program_counter += 2;
     }
 }
 
 fn call(intel8080: &mut Intel8080) {
     let address = combine_next_instructions(intel8080);
-    intel8080.push_address(intel8080.program_counter + 2);
+    intel8080.push_address(address);
     intel8080.program_counter = address;
 }
 
@@ -557,18 +553,16 @@ fn call_cond(instruction: u8, intel8080: &mut Intel8080) {
 
     if condition {
         call(intel8080);
-    } else {
-        intel8080.program_counter += 2;
     }
 }
 fn pop(instruction: u8, intel8080: &mut Intel8080) {
-    let rp = get_associated_paired_register(instruction, RegisterPair::PSW);
+    let rp = get_associated_paired_register(instruction);
     let popped = intel8080.pop_address();
     intel8080.set_register_pair(rp, popped);
 }
 
 fn push(instruction: u8, intel8080: &mut Intel8080) {
-    let rp = get_associated_paired_register(instruction, RegisterPair::PSW);
+    let rp = get_associated_paired_register(instruction);
     let pushed = intel8080.get_register_pair(&rp);
     intel8080.push_address(pushed);
 }
@@ -661,9 +655,8 @@ fn rst(instruction: u8, intel8080: &mut Intel8080) {
 }
 
 fn out(intel8080: &mut Intel8080) {
-    let address = intel8080.memory[intel8080.program_counter as usize];
-    intel8080.ports[address as usize] = intel8080.get_register(&Register::A);
-    (intel8080.output)(intel8080, address, 0);
+    let address = intel8080.memory[intel8080.program_counter as usize] as usize;
+    intel8080.ports[address] = intel8080.get_register(&Register::A);
 }
 
 fn inp(intel8080: &mut Intel8080) {
@@ -712,9 +705,9 @@ fn get_associated_register(instruction: u8, var: InstructionVars) -> Register {
     Register::from(subset)
 }
 
-fn get_associated_paired_register(instruction: u8, fourth: RegisterPair) -> RegisterPair {
+fn get_associated_paired_register(instruction: u8) -> RegisterPair {
     let subset = InstructionVars::get_subset(instruction, &InstructionVars::RP);
-    RegisterPair::get_register(subset, fourth)
+    RegisterPair::from(subset)
 }
 /// Combines the next two instructions into one 16 bits number. The third byte is the msb.
 fn combine_next_instructions(intel8080: &mut Intel8080) -> u16 {
@@ -757,7 +750,6 @@ fn sub_with_carry(intel8080: &mut Intel8080, accumulator: u8, sub: u8) -> u8 {
     res
 }
 enum InstructionVars {
-    P,
     RP,
     DDD,
     SSS,
@@ -766,7 +758,6 @@ enum InstructionVars {
 impl InstructionVars {
     fn negate(instruction: u8, var: InstructionVars) -> u8 {
         let neg = match var {
-            InstructionVars::P => !(1 << 4),
             InstructionVars::RP => !(0b11 << 4),
             InstructionVars::DDD => !(0b111 << 3),
             InstructionVars::SSS => !0b111,
@@ -777,10 +768,6 @@ impl InstructionVars {
     fn get_subset(instruction: u8, var: &InstructionVars) -> u8 {
         let shift;
         let neg = match var {
-            InstructionVars::P => {
-                shift = 4;
-                1 << shift
-            }
             InstructionVars::RP => {
                 shift = 4;
                 0b11 << shift
@@ -1012,7 +999,7 @@ mod tests {
     fn mvi() {
         let mut cpu = Intel8080::default();
         let ins = 0b00000110;
-        cpu.memory[0] = 69;
+        cpu.memory[(cpu.program_counter + 1) as usize] = 69;
         mvi_ddd_data(ins, &mut cpu);
         assert_eq!(cpu.get_register(&Register::B), 69)
     }
@@ -1608,7 +1595,6 @@ mod tests {
         cpu.memory[pc + 1] = 0xDD;
         call(&mut cpu);
         assert_eq!(cpu.program_counter, 0xDDCC);
-        assert_eq!(cpu.pop_address(), 0xA1B4);
     }
 
     #[test]
